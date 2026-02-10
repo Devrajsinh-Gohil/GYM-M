@@ -15,6 +15,33 @@ export default function ScanPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState("");
 
+    // ... (rest of code)
+
+    // RENDER ERROR IF PRESENT
+    if (error && !result) {
+        return (
+            <div className="flex flex-col min-h-screen bg-black text-white items-center justify-center p-4 text-center">
+                <XCircle className="w-16 h-16 text-red-500 mb-4" />
+                <h2 className="text-xl font-bold mb-2">Camera Error</h2>
+                <p className="text-gray-400 mb-6">{error}</p>
+                <p className="text-sm text-gray-500 mb-8">
+                    Please check: <br />
+                    1. You gave camera permission.<br />
+                    2. You are using HTTPS (if on mobile).
+                </p>
+                <button
+                    onClick={() => { setError(""); window.location.reload(); }}
+                    className="px-6 py-2 bg-white text-black rounded-full font-bold"
+                >
+                    Retry
+                </button>
+                <Link href="/dashboard" className="mt-4 text-gray-400 text-sm underline">
+                    Back to Dashboard
+                </Link>
+            </div>
+        );
+    }
+
     const handleScan = async (detectedCodes: any[]) => {
         if (isProcessing || !user || result) return;
 
@@ -75,7 +102,12 @@ export default function ScanPage() {
                     // Scanner View
                     <div className="w-full max-w-sm aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20">
                         <Scanner
-                            onScan={handleScan}
+                            onError={(err) => {
+                                console.error(err);
+                                setError(err?.message || "Camera access failed. Please inspect permissions.");
+                            }}
+                            constraints={{ facingMode: 'environment' }}
+                            formats={['qr_code']}
                             components={{
                                 onOff: true,
                                 torch: true,
