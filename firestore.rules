@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Functions ---
+
+    // 1. Authentication
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // 2. Data Access
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    // 3. Role Checks
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserData().role == 'SUPER_ADMIN';
+    }
+    
+    function isGymAdmin() {
+      return isAuthenticated() && getUserData().role == 'GYM_ADMIN';
+    }
+    
+    function isGymAdminFor(gymId) {
+      return isGymAdmin() && getUserData().gymId == gymId;
+    }
+
+    // 4. Ownership Checks
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // --- Collection Rules ---
+
+    // 1. Users Collection
+    match /users/{userId} {
+      // Read: Owner, Super Admin, or their Gym Admin
+      allow read: if isOwner(userId) || isSuperAdmin() || (isGymAdmin() && resource.data.gymId == getUserData().gymId);
+      
+      // Create: Anyone (Sign up), but cannot set 'role' to ADMIN/SUPER_ADMIN
+      allow create: if isAuthenticated() && isOwner(userId) && 
+        (!request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'USER');
+
+      // Update: 
+      // - Owner (Profile fields only, NOT role/status/plan)
+      // - Super Admin (Anything)
+      // - Gym Admin (Status, Plan, GymId for THEIR gym members)
+      allow update: if isSuperAdmin() 
+                    || (isGymAdmin() && resource.data.gymId == getUserData().gymId)
+                    || (isOwner(userId) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName', 'photoURL', 'phoneNumber', 'email']));
+      
+      // Delete: Only Super Admin
+      allow delete: if isSuperAdmin();
+    }
+
+    // 2. Gyms Collection
+    match /gyms/{gymId} {
+      allow read: if isAuthenticated(); // Public for selection during onboarding
+      allow write: if isSuperAdmin();   // Only Super Admin manages gyms
+    }
+
+    // 3. Attendance Collection
+    match /attendance/{attendanceId} {
+      // Create: User checking in (must match their Auth UID)
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      
+      // Update: User (Check out - must own doc)
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Read: Owner, Super Admin, or Gym Admin of that gym
+      allow read: if isOwner(resource.data.userId) || isSuperAdmin() || isGymAdminFor(resource.data.gymId);
+    }
+    
+    // 4. Plans Collection
+    match /plans/{planId} {
+      allow read: if isAuthenticated();
+      // Write: Gym Admin for THEIR gym, or Super Admin
+      allow write: if isSuperAdmin() || (isGymAdmin() && isGymAdminFor(request.resource.data.gymId));
+    }
+  }
+}
