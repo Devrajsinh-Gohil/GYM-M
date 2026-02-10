@@ -41,7 +41,7 @@ export const RevenueChart = ({ data }: ChartProps) => {
                     <Tooltip
                         contentStyle={{ backgroundColor: '#fff', borderRadius: '8px', border: '1px solid #E5E7EB', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
                         itemStyle={{ color: '#111827', fontWeight: 600 }}
-                        formatter={(value: number) => [`₹${value.toLocaleString()}`, "Revenue"]}
+                        formatter={(value: any) => [`₹${(value || 0).toLocaleString()}`, "Revenue"]}
                     />
                     <Line
                         type="monotone"
