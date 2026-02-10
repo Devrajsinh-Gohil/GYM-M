@@ -102,7 +102,8 @@ export default function ScanPage() {
                     // Scanner View
                     <div className="w-full max-w-sm aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20">
                         <Scanner
-                            onError={(err) => {
+                            onScan={handleScan}
+                            onError={(err: any) => {
                                 console.error(err);
                                 setError(err?.message || "Camera access failed. Please inspect permissions.");
                             }}
