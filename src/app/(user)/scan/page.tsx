@@ -35,7 +35,7 @@ export default function ScanPage() {
     // ... (rest of code)
 
     // RENDER ERROR IF PRESENT
-    if (error && !result) {
+    if (error && !result && selectedDeviceId !== "environment") { // Only show full error page if not using environment fallback
         return (
             <div className="flex flex-col min-h-screen bg-black text-white items-center justify-center p-4 text-center">
                 <XCircle className="w-16 h-16 text-red-500 mb-4" />
@@ -118,59 +118,42 @@ export default function ScanPage() {
                         </button>
                     </div>
                 ) : (
-                    <>
-                        {!selectedDeviceId ? (
-                            <div className="w-full max-w-sm space-y-4">
-                                <h2 className="text-xl font-bold text-center mb-4">Select Camera</h2>
-                                {videoDevices.length > 0 ? (
-                                    videoDevices.map((device, idx) => (
-                                        <button
-                                            key={device.deviceId}
-                                            onClick={() => setSelectedDeviceId(device.deviceId)}
-                                            className="w-full p-4 bg-gray-800 rounded-lg text-left hover:bg-gray-700 transition flex flex-col"
-                                        >
-                                            <span className="font-bold text-white">{device.label || `Camera ${idx + 1}`}</span>
-                                            <span className="text-xs text-gray-500">{device.deviceId.slice(0, 8)}...</span>
-                                        </button>
-                                    ))
-                                ) : (
-                                    <p className="text-center text-gray-500">Loading cameras...</p>
-                                )}
-                                <div className="mt-8 p-4 bg-gray-900 rounded-lg text-xs font-mono text-gray-400">
-                                    <p className="font-bold text-gray-200 mb-2">Debug Log:</p>
-                                    {debugInfo.map((info, i) => <p key={i}>{info}</p>)}
+                    <div className="w-full max-w-sm flex flex-col items-center">
+                        <div className="w-full aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20 mb-4">
+                            {selectedDeviceId ? (
+                                <Scanner
+                                    onScan={handleScan}
+                                    onError={(err: any) => {
+                                        console.error(err);
+                                        setError(err?.message || "Camera access failed.");
+                                    }}
+                                    constraints={selectedDeviceId === "environment" ? { facingMode: "environment" } : { deviceId: selectedDeviceId }}
+                                    formats={['qr_code']}
+                                    components={{ onOff: true, torch: true }}
+                                />
+                            ) : (
+                                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
+                                    <p className="text-gray-500">Initializing Camera...</p>
                                 </div>
-                            </div>
-                        ) : (
-                            <div className="w-full max-w-sm flex flex-col items-center">
-                                <div className="w-full aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20 mb-4">
-                                    <Scanner
-                                        onScan={handleScan}
-                                        onError={(err: any) => {
-                                            console.error(err);
-                                            setError(err?.message || "Camera access failed.");
-                                            setDebugInfo(prev => [...prev, `Scan Error: ${err?.message}`]);
-                                        }}
-                                        constraints={{ deviceId: selectedDeviceId }}
-                                        formats={['qr_code']}
-                                        components={{ onOff: true, torch: true }}
-                                    />
-                                    <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
+                            )}
+                            <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
+                            {!selectedDeviceId && (
+                                <div className="absolute inset-0 flex items-center justify-center">
+                                    <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-lg animate-pulse"></div>
                                 </div>
-                                <button
-                                    onClick={() => setSelectedDeviceId("")}
-                                    className="px-6 py-2 bg-gray-800 rounded-full text-sm font-medium"
-                                >
-                                    Switch Camera
-                                </button>
-                                {error && (
-                                    <div className="mt-4 p-2 bg-red-900/50 rounded text-xs text-red-200 w-full">
-                                        {error}
-                                    </div>
-                                )}
+                            )}
+                        </div>
+
+                        {error && (
+                            <div className="mt-4 p-2 bg-red-900/50 rounded text-xs text-red-200 w-full text-center">
+                                {error}
                             </div>
                         )}
-                    </>
+
+                        <p className="mt-8 text-sm text-gray-500 text-center max-w-xs">
+                            Align the Gym's QR code within the frame to automatically check in or out.
+                        </p>
+                    </div>
                 )}
             </div>
         </div>
