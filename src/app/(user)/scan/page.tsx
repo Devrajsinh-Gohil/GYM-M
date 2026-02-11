@@ -15,16 +15,16 @@ export default function ScanPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState("");
     const [debugInfo, setDebugInfo] = useState<string[]>([]);
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
+    const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
 
     useEffect(() => {
         const getDevices = async () => {
             try {
                 const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                setDebugInfo(prev => [...prev, `Video Devices: ${videoDevices.length}`]);
-                videoDevices.forEach(d => {
-                    setDebugInfo(prev => [...prev, `- ${d.label || 'Unnamed'} (${d.deviceId.slice(0, 5)}...)`]);
-                });
+                const vDevices = devices.filter(d => d.kind === 'videoinput');
+                setVideoDevices(vDevices);
+                setDebugInfo(prev => [...prev, `Found ${vDevices.length} video devices`]);
             } catch (err: any) {
                 setDebugInfo(prev => [...prev, `Enum Error: ${err.message}`]);
             }
@@ -118,66 +118,60 @@ export default function ScanPage() {
                         </button>
                     </div>
                 ) : (
-                    // Scanner View
-                    <div className="w-full max-w-sm aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20">
-                        <Scanner
-                            onScan={handleScan}
-                            onError={(err: any) => {
-                                console.error(err);
-                                const msg = err?.message || "Unknown error";
-                                setError(msg);
-                                setDebugInfo(prev => [...prev, `Scan Error: ${msg}`]);
-                            }}
-                            // constraints={{ facingMode: 'environment' }} // REMOVED FOR DEBUGGING
-                            formats={['qr_code']}
-                            components={{
-                                onOff: true,
-                                torch: true,
-                            }}
-                        />
-                        <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-lg animate-pulse"></div>
-                        </div>
-                    </div>
+                    <>
+                        {!selectedDeviceId ? (
+                            <div className="w-full max-w-sm space-y-4">
+                                <h2 className="text-xl font-bold text-center mb-4">Select Camera</h2>
+                                {videoDevices.length > 0 ? (
+                                    videoDevices.map((device, idx) => (
+                                        <button
+                                            key={device.deviceId}
+                                            onClick={() => setSelectedDeviceId(device.deviceId)}
+                                            className="w-full p-4 bg-gray-800 rounded-lg text-left hover:bg-gray-700 transition flex flex-col"
+                                        >
+                                            <span className="font-bold text-white">{device.label || `Camera ${idx + 1}`}</span>
+                                            <span className="text-xs text-gray-500">{device.deviceId.slice(0, 8)}...</span>
+                                        </button>
+                                    ))
+                                ) : (
+                                    <p className="text-center text-gray-500">Loading cameras...</p>
+                                )}
+                                <div className="mt-8 p-4 bg-gray-900 rounded-lg text-xs font-mono text-gray-400">
+                                    <p className="font-bold text-gray-200 mb-2">Debug Log:</p>
+                                    {debugInfo.map((info, i) => <p key={i}>{info}</p>)}
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="w-full max-w-sm flex flex-col items-center">
+                                <div className="w-full aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20 mb-4">
+                                    <Scanner
+                                        onScan={handleScan}
+                                        onError={(err: any) => {
+                                            console.error(err);
+                                            setError(err?.message || "Camera access failed.");
+                                            setDebugInfo(prev => [...prev, `Scan Error: ${err?.message}`]);
+                                        }}
+                                        constraints={{ deviceId: selectedDeviceId }}
+                                        formats={['qr_code']}
+                                        components={{ onOff: true, torch: true }}
+                                    />
+                                    <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
+                                </div>
+                                <button
+                                    onClick={() => setSelectedDeviceId("")}
+                                    className="px-6 py-2 bg-gray-800 rounded-full text-sm font-medium"
+                                >
+                                    Switch Camera
+                                </button>
+                                {error && (
+                                    <div className="mt-4 p-2 bg-red-900/50 rounded text-xs text-red-200 w-full">
+                                        {error}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </>
                 )}
-
-                {!result && (
-                    <p className="mt-8 text-sm text-gray-500 text-center max-w-xs">
-                        Align the Gym's QR code within the frame to automatically check in or out.
-                    </p>
-                )}
-
-                {/* Debug Overlay */}
-                <div className="mt-8 p-4 bg-gray-900 rounded-lg text-xs font-mono text-gray-400 w-full max-w-sm overflow-hidden">
-                    <p className="font-bold text-gray-200 mb-2">Debug Log:</p>
-                    {debugInfo.length === 0 ? <p>Initializing...</p> : debugInfo.map((info, i) => (
-                        <p key={i} className="truncate">{info}</p>
-                    ))}
-                    <p className="mt-2 text-yellow-500">Secure Context: {typeof window !== 'undefined' && window.isSecureContext ? 'Yes' : 'No'}</p>
-
-                    <button
-                        onClick={async () => {
-                            try {
-                                setDebugInfo(prev => [...prev, "Requesting stream..."]);
-                                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                                setDebugInfo(prev => [...prev, "Stream SUCCESS!"]);
-                                setDebugInfo(prev => [...prev, `Tracks: ${stream.getVideoTracks().length}`]);
-                                stream.getTracks().forEach(t => t.stop());
-                                // Refresh device list now that we have permission
-                                const devices = await navigator.mediaDevices.enumerateDevices();
-                                devices.forEach(d => {
-                                    if (d.kind === 'videoinput') setDebugInfo(prev => [...prev, `Found: ${d.label}`]);
-                                });
-                            } catch (err: any) {
-                                setDebugInfo(prev => [...prev, `Stream FAIL: ${err.name} - ${err.message}`]);
-                            }
-                        }}
-                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded w-full"
-                    >
-                        Test Camera Permission
-                    </button>
-                </div>
             </div>
         </div>
     );
