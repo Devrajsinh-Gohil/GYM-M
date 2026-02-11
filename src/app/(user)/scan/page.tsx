@@ -155,6 +155,28 @@ export default function ScanPage() {
                         <p key={i} className="truncate">{info}</p>
                     ))}
                     <p className="mt-2 text-yellow-500">Secure Context: {typeof window !== 'undefined' && window.isSecureContext ? 'Yes' : 'No'}</p>
+
+                    <button
+                        onClick={async () => {
+                            try {
+                                setDebugInfo(prev => [...prev, "Requesting stream..."]);
+                                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                                setDebugInfo(prev => [...prev, "Stream SUCCESS!"]);
+                                setDebugInfo(prev => [...prev, `Tracks: ${stream.getVideoTracks().length}`]);
+                                stream.getTracks().forEach(t => t.stop());
+                                // Refresh device list now that we have permission
+                                const devices = await navigator.mediaDevices.enumerateDevices();
+                                devices.forEach(d => {
+                                    if (d.kind === 'videoinput') setDebugInfo(prev => [...prev, `Found: ${d.label}`]);
+                                });
+                            } catch (err: any) {
+                                setDebugInfo(prev => [...prev, `Stream FAIL: ${err.name} - ${err.message}`]);
+                            }
+                        }}
+                        className="mt-4 px-4 py-2 bg-blue-600 text-white rounded w-full"
+                    >
+                        Test Camera Permission
+                    </button>
                 </div>
             </div>
         </div>
