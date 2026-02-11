@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { User, MapPin, Calendar, Activity, CreditCard } from "lucide-react";
+import { User, MapPin, Calendar, Activity, CreditCard, Settings } from "lucide-react";
 import Link from "next/link";
 
 interface UserProfile {
@@ -80,9 +80,18 @@ export default function UserDashboard() {
         <div className="space-y-6 pb-20"> {/* pb-20 for bottom nav clearance */}
 
             {/* Header */}
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900">Welcome, {profile?.name?.split(' ')[0]}!</h1>
-                <p className="text-gray-500">Let's get moving today.</p>
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Welcome, {profile?.name?.split(' ')[0]}!</h1>
+                    <p className="text-gray-500">Let's get moving today.</p>
+                </div>
+                <Link
+                    href="/profile"
+                    className="p-2.5 hover:bg-gray-100 rounded-full transition-colors"
+                    aria-label="Settings"
+                >
+                    <Settings className="w-6 h-6 text-gray-700" />
+                </Link>
             </div>
 
             {/* Status Alerts */}

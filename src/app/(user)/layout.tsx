@@ -3,7 +3,7 @@
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, QrCode, User } from "lucide-react";
+import { Home, QrCode } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function UserLayout({ children }: { children: React.ReactNode }) {
@@ -12,7 +12,6 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
     const navItems = [
         { href: "/dashboard", label: "Home", icon: Home },
         { href: "/scan", label: "Scan", icon: QrCode },
-        { href: "/profile", label: "Profile", icon: User },
     ];
 
     return (
