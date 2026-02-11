@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { useAuth } from "@/context/AuthContext";
 import { processAttendance, AttendanceResult } from "@/lib/attendance";
 import { useRouter } from "next/navigation";
-import { CheckCircle, XCircle, ArrowLeft } from "lucide-react";
+import { CheckCircle, XCircle, ArrowLeft, Camera } from "lucide-react";
 import Link from "next/link";
 
 export default function ScanPage() {
@@ -14,50 +14,25 @@ export default function ScanPage() {
     const [result, setResult] = useState<AttendanceResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState("");
-    const [debugInfo, setDebugInfo] = useState<string[]>([]);
-    const [selectedDeviceId, setSelectedDeviceId] = useState<string>("");
-    const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+    const [isCameraActive, setIsCameraActive] = useState(false);
+    const [activeDeviceId, setActiveDeviceId] = useState<string | undefined>(undefined);
 
-    useEffect(() => {
-        const getDevices = async () => {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const vDevices = devices.filter(d => d.kind === 'videoinput');
-                setVideoDevices(vDevices);
-                setDebugInfo(prev => [...prev, `Found ${vDevices.length} video devices`]);
-            } catch (err: any) {
-                setDebugInfo(prev => [...prev, `Enum Error: ${err.message}`]);
+    const startCamera = async () => {
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+
+            if (videoDevices.length > 0) {
+                // User confirmed Camera 0 works
+                setActiveDeviceId(videoDevices[0].deviceId);
             }
-        };
-        getDevices();
-    }, []);
-
-    // ... (rest of code)
-
-    // RENDER ERROR IF PRESENT
-    if (error && !result && selectedDeviceId !== "environment") { // Only show full error page if not using environment fallback
-        return (
-            <div className="flex flex-col min-h-screen bg-black text-white items-center justify-center p-4 text-center">
-                <XCircle className="w-16 h-16 text-red-500 mb-4" />
-                <h2 className="text-xl font-bold mb-2">Camera Error</h2>
-                <p className="text-gray-400 mb-6">{error}</p>
-                <p className="text-sm text-gray-500 mb-8">
-                    Please check: <br />
-                    1. You gave camera permission.<br />
-                    2. You are using HTTPS (if on mobile).
-                </p>
-                <button
-                    onClick={() => { setError(""); window.location.reload(); }}
-                    className="px-6 py-2 bg-white text-black rounded-full font-bold"
-                >
-                    Retry
-                </button>
-                <Link href="/dashboard" className="mt-4 text-gray-400 text-sm underline">
-                    Back to Dashboard
-                </Link>
-            </div>
-        );
-    }
+            setIsCameraActive(true);
+        } catch (err: any) {
+            console.error("Error enumerating devices:", err);
+            // Fallback to letting the scanner decide or use environment facing mode
+            setIsCameraActive(true);
+        }
+    };
 
     const handleScan = async (detectedCodes: any[]) => {
         if (isProcessing || !user || result) return;
@@ -85,6 +60,12 @@ export default function ScanPage() {
             setIsProcessing(false);
         }
     };
+
+    // RENDER ERROR IF PRESENT (Fatal errors that block the UI)
+    if (error && !result && !isCameraActive) {
+        // Only show fatal errors here if camera failed to start or permission denied
+        // scanning errors are handled in the scanner view
+    }
 
     return (
         <div className="flex flex-col min-h-screen bg-black text-white">
@@ -118,42 +99,57 @@ export default function ScanPage() {
                         </button>
                     </div>
                 ) : (
-                    <div className="w-full max-w-sm flex flex-col items-center">
-                        <div className="w-full aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20 mb-4">
-                            {selectedDeviceId ? (
-                                <Scanner
-                                    onScan={handleScan}
-                                    onError={(err: any) => {
-                                        console.error(err);
-                                        setError(err?.message || "Camera access failed.");
-                                    }}
-                                    constraints={selectedDeviceId === "environment" ? { facingMode: "environment" } : { deviceId: selectedDeviceId }}
-                                    formats={['qr_code']}
-                                    components={{ onOff: true, torch: true }}
-                                />
-                            ) : (
-                                <div className="absolute inset-0 flex items-center justify-center bg-gray-900">
-                                    <p className="text-gray-500">Initializing Camera...</p>
+                    <>
+                        {!isCameraActive ? (
+                            <div className="text-center">
+                                <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
+                                    <Camera className="w-10 h-10 text-gray-400" />
                                 </div>
-                            )}
-                            <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
-                            {!selectedDeviceId && (
-                                <div className="absolute inset-0 flex items-center justify-center">
-                                    <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-lg animate-pulse"></div>
+                                <h2 className="text-xl font-bold mb-2">Ready to Scan?</h2>
+                                <p className="text-gray-400 mb-8 max-w-xs mx-auto">
+                                    Click below to open the camera and scan the gym's QR code.
+                                </p>
+                                <button
+                                    onClick={startCamera}
+                                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-full hover:bg-blue-700 transition"
+                                >
+                                    Open Camera
+                                </button>
+                                {error && <p className="mt-4 text-red-500 text-sm">{error}</p>}
+                            </div>
+                        ) : (
+                            // Scanner View
+                            <div className="w-full max-w-sm flex flex-col items-center">
+                                <div className="w-full aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20 mb-4">
+                                    <Scanner
+                                        onScan={handleScan}
+                                        onError={(err: any) => {
+                                            console.error(err);
+                                            // Don't show confusing errors to user immediately, just log
+                                            // setError(err?.message || "Camera error");
+                                        }}
+                                        // Use specific device ID if found (multicamera phones), else environment
+                                        constraints={activeDeviceId ? { deviceId: activeDeviceId } : { facingMode: 'environment' }}
+                                        formats={['qr_code']}
+                                        components={{ onOff: true, torch: true }}
+                                    />
+                                    <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
+                                    <div className="absolute inset-0 flex items-center justify-center">
+                                        <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-lg animate-pulse"></div>
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-
-                        {error && (
-                            <div className="mt-4 p-2 bg-red-900/50 rounded text-xs text-red-200 w-full text-center">
-                                {error}
+                                <p className="text-sm text-gray-400 text-center">
+                                    Align the code within the frame
+                                </p>
+                                <button
+                                    onClick={() => { setIsCameraActive(false); setError(""); }}
+                                    className="mt-6 text-sm text-gray-500 underline"
+                                >
+                                    Cancel
+                                </button>
                             </div>
                         )}
-
-                        <p className="mt-8 text-sm text-gray-500 text-center max-w-xs">
-                            Align the Gym's QR code within the frame to automatically check in or out.
-                        </p>
-                    </div>
+                    </>
                 )}
             </div>
         </div>
