@@ -25,8 +25,13 @@ export default function ScanPage() {
             setVideoDevices(vDevices);
 
             if (vDevices.length > 0) {
-                // Default to first camera (Camera 0)
-                setActiveDeviceId(vDevices[0].deviceId);
+                const savedId = localStorage.getItem("gym-platform-camera-id");
+                if (savedId && vDevices.find(d => d.deviceId === savedId)) {
+                    setActiveDeviceId(savedId);
+                } else {
+                    // Default to first camera (Camera 0)
+                    setActiveDeviceId(vDevices[0].deviceId);
+                }
             }
             setIsCameraActive(true);
         } catch (err: any) {
@@ -154,7 +159,9 @@ export default function ScanPage() {
                                             if (videoDevices.length > 1) {
                                                 const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
                                                 const nextIndex = (currentIndex + 1) % videoDevices.length;
-                                                setActiveDeviceId(videoDevices[nextIndex].deviceId);
+                                                const nextDeviceId = videoDevices[nextIndex].deviceId;
+                                                setActiveDeviceId(nextDeviceId);
+                                                localStorage.setItem("gym-platform-camera-id", nextDeviceId);
                                             }
                                         }}
                                         className="px-6 py-2 bg-gray-800 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-gray-700 transition"
