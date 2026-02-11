@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { useAuth } from "@/context/AuthContext";
 import { processAttendance, AttendanceResult } from "@/lib/attendance";
@@ -14,6 +14,23 @@ export default function ScanPage() {
     const [result, setResult] = useState<AttendanceResult | null>(null);
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState("");
+    const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+    useEffect(() => {
+        const getDevices = async () => {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                setDebugInfo(prev => [...prev, `Video Devices: ${videoDevices.length}`]);
+                videoDevices.forEach(d => {
+                    setDebugInfo(prev => [...prev, `- ${d.label || 'Unnamed'} (${d.deviceId.slice(0, 5)}...)`]);
+                });
+            } catch (err: any) {
+                setDebugInfo(prev => [...prev, `Enum Error: ${err.message}`]);
+            }
+        };
+        getDevices();
+    }, []);
 
     // ... (rest of code)
 
@@ -72,14 +89,16 @@ export default function ScanPage() {
     return (
         <div className="flex flex-col min-h-screen bg-black text-white">
             {/* Header */}
-            <div className="p-4 flex items-center">
-                <Link href="/dashboard" className="p-2 bg-white/10 rounded-full">
-                    <ArrowLeft className="w-6 h-6" />
-                </Link>
-                <h1 className="ml-4 text-lg font-bold">Scan Gym QR</h1>
+            <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center">
+                    <Link href="/dashboard" className="p-2 bg-white/10 rounded-full">
+                        <ArrowLeft className="w-6 h-6" />
+                    </Link>
+                    <h1 className="ml-4 text-lg font-bold">Scan Gym QR</h1>
+                </div>
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-4">
+            <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
                 {result ? (
                     // Result View
                     <div className="text-center space-y-4 animate-in fade-in zoom-in">
@@ -105,9 +124,11 @@ export default function ScanPage() {
                             onScan={handleScan}
                             onError={(err: any) => {
                                 console.error(err);
-                                setError(err?.message || "Camera access failed. Please inspect permissions.");
+                                const msg = err?.message || "Unknown error";
+                                setError(msg);
+                                setDebugInfo(prev => [...prev, `Scan Error: ${msg}`]);
                             }}
-                            constraints={{ facingMode: 'environment' }}
+                            // constraints={{ facingMode: 'environment' }} // REMOVED FOR DEBUGGING
                             formats={['qr_code']}
                             components={{
                                 onOff: true,
@@ -126,6 +147,15 @@ export default function ScanPage() {
                         Align the Gym's QR code within the frame to automatically check in or out.
                     </p>
                 )}
+
+                {/* Debug Overlay */}
+                <div className="mt-8 p-4 bg-gray-900 rounded-lg text-xs font-mono text-gray-400 w-full max-w-sm overflow-hidden">
+                    <p className="font-bold text-gray-200 mb-2">Debug Log:</p>
+                    {debugInfo.length === 0 ? <p>Initializing...</p> : debugInfo.map((info, i) => (
+                        <p key={i} className="truncate">{info}</p>
+                    ))}
+                    <p className="mt-2 text-yellow-500">Secure Context: {typeof window !== 'undefined' && window.isSecureContext ? 'Yes' : 'No'}</p>
+                </div>
             </div>
         </div>
     );
