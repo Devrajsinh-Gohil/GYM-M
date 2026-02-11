@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { User, MapPin, Calendar, Activity, CreditCard, Settings } from "lucide-react";
+import { MapPin, Calendar, Activity, CreditCard, Settings, TrendingUp, Clock, CheckCircle2, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 interface UserProfile {
@@ -14,7 +14,8 @@ interface UserProfile {
     status: string;
     plan?: {
         name: string;
-        expiry: any; // Timestamp
+        expiry: any;
+        price?: number;
     }
 }
 
@@ -28,7 +29,6 @@ export default function UserDashboard() {
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [gym, setGym] = useState<GymDetails | null>(null);
     const [loading, setLoading] = useState(true);
-
     const [attendance, setAttendance] = useState<any[]>([]);
 
     useEffect(() => {
@@ -36,13 +36,11 @@ export default function UserDashboard() {
             if (!user) return;
 
             try {
-                // 1. Fetch User Profile
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data() as UserProfile;
                     setProfile(userData);
 
-                    // 2. Fetch Gym Details
                     if (userData.gymId) {
                         const gymDoc = await getDoc(doc(db, "gyms", userData.gymId));
                         if (gymDoc.exists()) {
@@ -51,11 +49,10 @@ export default function UserDashboard() {
                     }
                 }
 
-                // 2. Fetch Recent Attendance
                 const attQuery = query(
                     collection(db, "attendance"),
                     where("userId", "==", user.uid),
-                    orderBy("checkInTime", "desc"), // checkInTime
+                    orderBy("checkInTime", "desc"),
                     limit(5)
                 );
                 const attSnap = await getDocs(attQuery);
@@ -73,171 +70,238 @@ export default function UserDashboard() {
     }, [user]);
 
     if (loading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-500 font-medium">Loading your dashboard...</p>
+                </div>
+            </div>
+        );
     }
 
-    return (
-        <div className="space-y-6 pb-20"> {/* pb-20 for bottom nav clearance */}
+    const getDaysLeft = () => {
+        if (!profile?.plan?.expiry) return null;
+        const expiry = new Date(profile.plan.expiry.seconds * 1000);
+        const now = new Date();
+        return Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    };
 
-            {/* Header */}
+    const daysLeft = getDaysLeft();
+    const completedSessions = attendance.filter((a: any) => a.status === 'COMPLETED').length;
+
+    return (
+        <div className="space-y-6 pb-24 fade-in">
+
+            {/* Header with Settings */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Welcome, {profile?.name?.split(' ')[0]}!</h1>
-                    <p className="text-gray-500">Let's get moving today.</p>
+                    <h1 className="text-3xl font-bold text-gray-900">
+                        Hey, {profile?.name?.split(' ')[0]}! 👋
+                    </h1>
+                    <p className="text-gray-600 mt-1">Ready to crush your goals today?</p>
                 </div>
                 <Link
                     href="/profile"
-                    className="p-2.5 hover:bg-gray-100 rounded-full transition-colors"
+                    className="p-3 hover:bg-gray-100 rounded-full transition-all hover-lift"
                     aria-label="Settings"
                 >
                     <Settings className="w-6 h-6 text-gray-700" />
                 </Link>
             </div>
 
-            {/* Status Alerts */}
-            {profile?.plan?.expiry && (
-                (() => {
-                    const expiry = new Date(profile.plan.expiry.seconds * 1000);
-                    const now = new Date();
-                    const daysLeft = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-                    if (daysLeft < 0) {
-                        return (
-                            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3 text-red-800">
-                                <div className="p-2 bg-red-100 rounded-full">
-                                    <Activity className="w-5 h-5 text-red-600" />
-                                </div>
-                                <div>
-                                    <p className="font-bold">Membership Expired</p>
-                                    <p className="text-sm">Your plan expired {Math.abs(daysLeft)} days ago. Please pay at the desk to renew.</p>
-                                </div>
-                            </div>
-                        );
-                    } else if (daysLeft <= 7) {
-                        return (
-                            <div className="bg-orange-50 border border-orange-200 rounded-lg p-4 flex items-center gap-3 text-orange-800">
-                                <div className="p-2 bg-orange-100 rounded-full">
-                                    <Calendar className="w-5 h-5 text-orange-600" />
-                                </div>
-                                <div>
-                                    <p className="font-bold">Expiring Soon</p>
-                                    <p className="text-sm">Your plan expires in {daysLeft} days. Renew soon to avoid interruption.</p>
-                                </div>
-                            </div>
-                        );
-                    }
-                    return null;
-                })()
+            {/* Status Alert */}
+            {daysLeft !== null && (
+                <div className={`rounded-2xl p-5 border-2 ${daysLeft < 0
+                        ? 'bg-red-50 border-red-200'
+                        : daysLeft <= 7
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-emerald-50 border-emerald-200'
+                    }`}>
+                    <div className="flex items-start gap-4">
+                        <div className={`p-3 rounded-xl ${daysLeft < 0
+                                ? 'bg-red-100'
+                                : daysLeft <= 7
+                                    ? 'bg-amber-100'
+                                    : 'bg-emerald-100'
+                            }`}>
+                            <Calendar className={`w-6 h-6 ${daysLeft < 0
+                                    ? 'text-red-600'
+                                    : daysLeft <= 7
+                                        ? 'text-amber-600'
+                                        : 'text-emerald-600'
+                                }`} />
+                        </div>
+                        <div className="flex-1">
+                            <h3 className={`font-bold text-lg ${daysLeft < 0
+                                    ? 'text-red-900'
+                                    : daysLeft <= 7
+                                        ? 'text-amber-900'
+                                        : 'text-emerald-900'
+                                }`}>
+                                {daysLeft < 0 ? 'Membership Expired' : daysLeft <= 7 ? 'Expiring Soon' : 'Active Membership'}
+                            </h3>
+                            <p className={`text-sm mt-1 ${daysLeft < 0
+                                    ? 'text-red-700'
+                                    : daysLeft <= 7
+                                        ? 'text-amber-700'
+                                        : 'text-emerald-700'
+                                }`}>
+                                {daysLeft < 0
+                                    ? `Your plan expired ${Math.abs(daysLeft)} days ago. Please renew at the desk.`
+                                    : daysLeft <= 7
+                                        ? `Your plan expires in ${daysLeft} days. Renew soon!`
+                                        : `Your membership is active for ${daysLeft} more days.`
+                                }
+                            </p>
+                        </div>
+                    </div>
+                </div>
             )}
 
-            {/* Digital Member Card */}
-            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 to-slate-800 p-6 text-white shadow-xl">
-                <div className="absolute top-0 right-0 -mr-16 -mt-16 h-48 w-48 rounded-full bg-white/5 blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 -ml-16 -mb-16 h-48 w-48 rounded-full bg-emerald-500/10 blur-3xl"></div>
+            {/* Hero Membership Card */}
+            <div className="relative overflow-hidden rounded-3xl gradient-emerald p-8 text-white shadow-xl">
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 rounded-full bg-black/10 blur-3xl"></div>
 
                 <div className="relative z-10">
-                    <div className="flex items-start justify-between">
+                    <div className="flex items-start justify-between mb-6">
                         <div>
-                            <h2 className="text-lg font-bold tracking-wide">{gym?.name || "No Gym Selected"}</h2>
-                            <div className="flex items-center gap-1 text-xs text-slate-400 mt-1">
-                                <MapPin className="w-3 h-3" />
-                                {gym?.location || "Unknown Location"}
+                            <p className="text-emerald-100 text-sm font-medium uppercase tracking-wider mb-1">Member Card</p>
+                            <h2 className="text-2xl font-bold">{gym?.name || "No Gym Selected"}</h2>
+                            <div className="flex items-center gap-2 text-emerald-100 mt-2">
+                                <MapPin className="w-4 h-4" />
+                                <span className="text-sm">{gym?.location || "Unknown Location"}</span>
                             </div>
                         </div>
-                        <div className={`px-2 py-1 rounded-full text-xs font-bold ${profile?.status === 'ACTIVE' ? 'bg-emerald-500 text-white' : 'bg-yellow-500 text-black'}`}>
+                        <div className={`px-4 py-2 rounded-full text-sm font-bold ${profile?.status === 'ACTIVE'
+                                ? 'bg-white/20 backdrop-blur-sm text-white'
+                                : 'bg-amber-400 text-amber-900'
+                            }`}>
                             {profile?.status || "UNKNOWN"}
                         </div>
                     </div>
 
-                    <div className="mt-8 flex items-end justify-between">
+                    <div className="flex items-end justify-between">
                         <div>
-                            <p className="text-xs text-slate-400 uppercase tracking-wider">Member Name</p>
-                            <p className="text-lg font-medium">{profile?.name}</p>
+                            <p className="text-emerald-100 text-xs uppercase tracking-wider mb-1">Member Name</p>
+                            <p className="text-xl font-bold">{profile?.name}</p>
                         </div>
-                        <div>
-                            <User className="w-8 h-8 text-slate-600" />
+                        <div className="w-16 h-16 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                            <Sparkles className="w-8 h-8" />
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Quick Stats / Membership */}
+            {/* Quick Stats Grid */}
             <div className="grid grid-cols-2 gap-4">
-                <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-2 mb-2">
-                        <CreditCard className="w-4 h-4 text-emerald-600" />
-                        <h3 className="text-sm font-semibold text-gray-700">Current Plan</h3>
+                <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover-lift transition-smooth">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="p-3 bg-emerald-100 rounded-xl">
+                            <CreditCard className="w-5 h-5 text-emerald-600" />
+                        </div>
                     </div>
-                    <p className="text-lg font-bold text-gray-900">{profile?.plan?.name || "No Plan"}</p>
-                    <p className="text-xs text-gray-500">
-                        {profile?.plan?.expiry ? `Expires: ${new Date(profile.plan.expiry.seconds * 1000).toLocaleDateString()}` : "Contact Admin"}
-                    </p>
+                    <p className="text-sm text-gray-600 font-medium mb-1">Current Plan</p>
+                    <p className="text-xl font-bold text-gray-900">{profile?.plan?.name || "No Plan"}</p>
+                    {profile?.plan?.expiry && (
+                        <p className="text-xs text-gray-500 mt-2">
+                            Until {new Date(profile.plan.expiry.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                        </p>
+                    )}
                 </div>
-                <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
-                    <div className="flex items-center gap-2 mb-2">
-                        <Activity className="w-4 h-4 text-emerald-600" />
-                        <h3 className="text-sm font-semibold text-gray-700">Attendance</h3>
+
+                <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm hover-lift transition-smooth">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="p-3 bg-blue-100 rounded-xl">
+                            <TrendingUp className="w-5 h-5 text-blue-600" />
+                        </div>
                     </div>
-                    <p className="text-lg font-bold text-gray-900">{attendance.filter((a: any) => a.status === 'COMPLETED').length}</p>
-                    <p className="text-xs text-gray-500">Sessions (recent)</p>
+                    <p className="text-sm text-gray-600 font-medium mb-1">Sessions</p>
+                    <p className="text-xl font-bold text-gray-900">{completedSessions}</p>
+                    <p className="text-xs text-gray-500 mt-2">Completed</p>
                 </div>
             </div>
 
             {/* Recent Activity */}
-            <div className="rounded-xl bg-white p-4 shadow-sm border border-gray-100">
-                <div className="flex items-center justify-between mb-4">
-                    <h3 className="font-bold text-gray-900">Recent Activity</h3>
-                    <Link href="/history" className="text-xs text-emerald-600 font-medium hover:text-emerald-700">View All</Link>
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h3 className="font-bold text-gray-900 text-lg">Recent Activity</h3>
+                        <p className="text-sm text-gray-500 mt-0.5">Your latest check-ins</p>
+                    </div>
+                    <Link href="/history" className="text-sm text-emerald-600 font-semibold hover:text-emerald-700 transition-colors">
+                        View All
+                    </Link>
                 </div>
 
-                <div className="space-y-4">
+                <div className="divide-y divide-gray-100">
                     {attendance.length === 0 ? (
-                        <div className="flex items-center gap-3 py-2 opacity-50">
-                            <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                                <Calendar className="w-4 h-4 text-gray-400" />
+                        <div className="p-12 text-center">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Activity className="w-8 h-8 text-gray-400" />
                             </div>
-                            <div>
-                                <p className="text-sm font-medium text-gray-900">No recent check-ins</p>
-                                <p className="text-xs text-gray-500">Start working out!</p>
-                            </div>
+                            <p className="text-gray-900 font-medium mb-1">No recent check-ins</p>
+                            <p className="text-sm text-gray-500">Start your fitness journey today!</p>
                         </div>
                     ) : (
                         attendance.map((session: any) => (
-                            <div key={session.id} className="flex items-start gap-4 py-3 border-b last:border-0 border-gray-50">
-                                <div className={`w-10 h-10 rounded-full flex shrink-0 items-center justify-center ${session.checkOutTime ? 'bg-blue-100' : 'bg-emerald-100'}`}>
-                                    <Activity className={`w-4 h-4 ${session.checkOutTime ? 'text-blue-600' : 'text-emerald-600'}`} />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex justify-between items-center mb-1">
-                                        <p className="text-sm font-bold text-gray-900 truncate">
-                                            {session.checkOutTime ? 'Workout Completed' : 'Current Session'}
-                                        </p>
-                                        <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full ${session.checkOutTime ? 'bg-gray-100 text-gray-600' : 'bg-emerald-100 text-emerald-700'}`}>
-                                            {session.checkOutTime ? 'Done' : 'Active'}
-                                        </span>
+                            <div key={session.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-start gap-4">
+                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${session.checkOutTime
+                                            ? 'bg-blue-100'
+                                            : 'bg-emerald-100'
+                                        }`}>
+                                        {session.checkOutTime ? (
+                                            <CheckCircle2 className="w-6 h-6 text-blue-600" />
+                                        ) : (
+                                            <Activity className="w-6 h-6 text-emerald-600" />
+                                        )}
                                     </div>
-                                    <div className="flex justify-between items-end">
-                                        <div className="text-xs text-gray-500">
-                                            <div className="flex items-center gap-1">
-                                                <span>In:</span>
-                                                <span className="font-medium text-gray-900">
+
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <p className="font-semibold text-gray-900">
+                                                {session.checkOutTime ? 'Workout Completed' : 'Active Session'}
+                                            </p>
+                                            <span className={`text-xs font-bold px-3 py-1 rounded-full ${session.checkOutTime
+                                                    ? 'bg-gray-100 text-gray-700'
+                                                    : 'bg-emerald-100 text-emerald-700'
+                                                }`}>
+                                                {session.checkOutTime ? 'Done' : 'Active'}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-4 text-sm">
+                                            <div className="flex items-center gap-1.5 text-gray-600">
+                                                <Clock className="w-4 h-4" />
+                                                <span className="font-medium">
                                                     {session.checkInTime ? new Date(session.checkInTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
                                                 </span>
+                                                {session.checkOutTime && (
+                                                    <>
+                                                        <span className="text-gray-400">→</span>
+                                                        <span className="font-medium">
+                                                            {new Date(session.checkOutTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </span>
+                                                    </>
+                                                )}
                                             </div>
-                                            {session.checkOutTime && (
-                                                <div className="flex items-center gap-1 mt-0.5">
-                                                    <span>Out:</span>
-                                                    <span className="font-medium text-gray-900">
-                                                        {new Date(session.checkOutTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </span>
+
+                                            {session.duration && (
+                                                <div className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-semibold">
+                                                    {Math.floor(session.duration / 60)}h {session.duration % 60}m
                                                 </div>
                                             )}
                                         </div>
-                                        {session.duration && (
-                                            <div className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                                                {Math.floor(session.duration / 60)}h {session.duration % 60}m
-                                            </div>
-                                        )}
+
+                                        <p className="text-xs text-gray-500 mt-1.5">
+                                            {session.checkInTime && new Date(session.checkInTime.seconds * 1000).toLocaleDateString('en-US', {
+                                                weekday: 'long',
+                                                month: 'short',
+                                                day: 'numeric'
+                                            })}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
@@ -245,7 +309,6 @@ export default function UserDashboard() {
                     )}
                 </div>
             </div>
-
         </div>
     );
 }

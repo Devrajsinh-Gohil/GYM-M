@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, orderBy, limit, doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Users, Activity, TrendingUp, Calendar, CheckSquare } from "lucide-react";
+import { Users, Activity, TrendingUp, Calendar, CheckSquare, AlertCircle, Sparkles, BarChart3 } from "lucide-react";
 import { RevenueChart, MemberGrowthChart, AttendanceChart } from "@/components/AnalyticsCharts";
 
 interface DashboardStats {
@@ -15,6 +15,8 @@ interface DashboardStats {
     revenueData: any[];
     growthData: any[];
     attendanceData: any[];
+    expiredCount?: number;
+    expiringSoonCount?: number;
 }
 
 export default function AdminDashboard() {
@@ -90,14 +92,10 @@ export default function AdminDashboard() {
                     // Aggregate Member Growth (createdAt)
                     let joinedMonth = "Unknown";
                     if (data.createdAt) {
-                        // Use createdAt if available
                         joinedMonth = new Date(data.createdAt.seconds * 1000).toLocaleString('default', { month: 'short' });
                     } else if (data.joinedAt) {
-                        // Fallback to joinedAt
                         joinedMonth = new Date(data.joinedAt.seconds * 1000).toLocaleString('default', { month: 'short' });
                     } else {
-                        // If no date, maybe count as current month or skip
-                        // For now, let's count them in current month if undefined
                         joinedMonth = new Date().toLocaleString('default', { month: 'short' });
                     }
 
@@ -105,48 +103,29 @@ export default function AdminDashboard() {
                         memberGrowth[joinedMonth]++;
                     }
 
-                    // Aggregate Revenue (assume plan price is recurring monthly for active members)
-                    // Or just sum total active plan value for current estimated MPR
-                    // Simple MVP: Add plan price to the month they joined? No, Revenue Trends usually means income over time.
-                    // If we don't have transaction history, we can't show REAL historical revenue.
-                    // Fallback: Show Estimated Monthly Revenue based on CURRENT active plans, 
-                    // and maybe show separate line for "New Sales" based on joined date.
-
-                    // Let's stick to "Estimated Revenue" based on active members count for now, 
-                    // or construct a "Potential Revenue" history by assuming they paid every month since joining.
-                    // Better approach for MVP without Transactions collection:
-                    // Revenue = Sum of prices of members joined in that month (New MRR)
-
-                    const price = data.plan?.price ? Number(data.plan.price) : 0;
-                    if (price > 0 && memberGrowth[joinedMonth] !== undefined) {
-                        revenueByMonth[joinedMonth] += price;
+                    // Aggregate Revenue (plan price)
+                    if (data.plan?.price && data.plan?.expiry) {
+                        const planMonth = new Date(data.plan.expiry.seconds * 1000).toLocaleString('default', { month: 'short' });
+                        if (revenueByMonth[planMonth] !== undefined) {
+                            revenueByMonth[planMonth] += data.plan.price;
+                        }
                     }
                 });
 
-                // Prepare Chart Data
-                const growthData = months.map(m => ({
-                    name: m,
-                    members: memberGrowth[m] || 0
+                const growthData = months.map(month => ({
+                    month,
+                    count: memberGrowth[month]
                 }));
 
-                const revenueData = months.map(m => ({
-                    name: m,
-                    revenue: revenueByMonth[m] || 0
+                const revenueData = months.map(month => ({
+                    month,
+                    revenue: revenueByMonth[month]
                 }));
 
-                // 3. Counts: Today's Checkins & Attendance Trend
-                const today = new Date();
-                const todayStr = today.toISOString().split('T')[0];
-
-                const attendanceQuery = query(
-                    collection(db, "attendance"),
-                    where("gymId", "==", gymId),
-                    orderBy("checkInTime", "desc"),
-                    limit(100) // Fetch last 100 for trends
-                );
+                // 3. Today's Check-ins
+                const todayStr = new Date().toISOString().split('T')[0];
+                const attendanceQuery = query(collection(db, "attendance"), where("gymId", "==", gymId), orderBy("checkInTime", "desc"), limit(200));
                 const attendanceSnap = await getDocs(attendanceQuery);
-
-                // Calculate Today's Checkins
                 const todaysCheckins = attendanceSnap.docs.filter(d => d.data().date === todayStr).length;
 
                 // Process Attendance Trend (Last 7 Days)
@@ -162,7 +141,7 @@ export default function AdminDashboard() {
                 }));
 
                 // 4. Recent Activity
-                const recentSessionsRaw = attendanceSnap.docs.slice(0, 10); // Take top 10
+                const recentSessionsRaw = attendanceSnap.docs.slice(0, 10);
                 const recentSessions = await Promise.all(recentSessionsRaw.map(async (docSnap) => {
                     const data = docSnap.data();
                     let userName = "Unknown User";
@@ -195,92 +174,179 @@ export default function AdminDashboard() {
         fetchStats();
     }, [user]);
 
-    if (loading) return <div className="p-8">Loading stats...</div>;
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-500 font-medium">Loading analytics...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="space-y-6">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard: {gymName}</h1>
+        <div className="space-y-6 pb-20 fade-in">
+            {/* Header */}
+            <div className="relative overflow-hidden rounded-3xl gradient-emerald p-8 text-white shadow-xl">
+                <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white/10 blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-64 h-64 rounded-full bg-black/10 blur-3xl"></div>
+
+                <div className="relative z-10 flex items-center justify-between">
+                    <div>
+                        <div className="flex items-center gap-2 mb-2">
+                            <BarChart3 className="w-6 h-6 text-emerald-200" />
+                            <p className="text-emerald-100 text-sm font-medium uppercase tracking-wider">Admin Dashboard</p>
+                        </div>
+                        <h1 className="text-3xl font-bold mb-1">{gymName}</h1>
+                        <p className="text-emerald-100">Real-time insights and analytics</p>
+                    </div>
+                    <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                        <Sparkles className="w-8 h-8" />
+                    </div>
+                </div>
+            </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <StatsCard
                     title="Total Members"
                     value={stats.totalMembers}
-                    icon={<Users className="w-6 h-6 text-blue-600" />}
-                    bg="bg-blue-50"
+                    icon={<Users className="w-6 h-6" />}
+                    gradient="from-blue-500 to-blue-600"
+                    iconBg="bg-blue-100"
+                    iconColor="text-blue-600"
                 />
                 <StatsCard
                     title="Active Members"
                     value={stats.activeMembers}
-                    icon={<Activity className="w-6 h-6 text-emerald-600" />}
-                    bg="bg-emerald-50"
+                    icon={<Activity className="w-6 h-6" />}
+                    gradient="from-emerald-500 to-emerald-600"
+                    iconBg="bg-emerald-100"
+                    iconColor="text-emerald-600"
                 />
                 <StatsCard
-                    title="Expiring Soon (7d)"
-                    value={(stats as any).expiringSoonCount || 0}
-                    icon={<Calendar className="w-6 h-6 text-orange-600" />}
-                    bg="bg-orange-50"
+                    title="Expiring Soon"
+                    value={stats.expiringSoonCount || 0}
+                    icon={<Calendar className="w-6 h-6" />}
+                    gradient="from-amber-500 to-amber-600"
+                    iconBg="bg-amber-100"
+                    iconColor="text-amber-600"
+                    subtitle="Next 7 days"
                 />
                 <StatsCard
-                    title="Expired / Due"
-                    value={(stats as any).expiredCount || 0}
-                    icon={<TrendingUp className="w-6 h-6 text-red-600" />}
-                    bg="bg-red-50"
+                    title="Expired Plans"
+                    value={stats.expiredCount || 0}
+                    icon={<AlertCircle className="w-6 h-6" />}
+                    gradient="from-red-500 to-red-600"
+                    iconBg="bg-red-100"
+                    iconColor="text-red-600"
+                    subtitle="Needs renewal"
                 />
             </div>
 
             {/* Analytics Charts Section */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="font-semibold text-gray-900 mb-4">Revenue Trends</h3>
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover-lift transition-smooth">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center">
+                            <TrendingUp className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-gray-900">Revenue Trends</h3>
+                            <p className="text-xs text-gray-500">Last 6 months</p>
+                        </div>
+                    </div>
                     <RevenueChart data={stats.revenueData} />
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-                    <h3 className="font-semibold text-gray-900 mb-4">Member Growth</h3>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 hover-lift transition-smooth">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
+                            <Users className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-gray-900">Member Growth</h3>
+                            <p className="text-xs text-gray-500">Last 6 months</p>
+                        </div>
+                    </div>
                     <MemberGrowthChart data={stats.growthData} />
                 </div>
-                <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
-                    <h3 className="font-semibold text-gray-900 mb-4">Check-in Traffic (Last 7 Days)</h3>
+
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200 lg:col-span-2 hover-lift transition-smooth">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                            <Activity className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div>
+                            <h3 className="font-bold text-gray-900">Check-in Traffic</h3>
+                            <p className="text-xs text-gray-500">Last 7 days</p>
+                        </div>
+                    </div>
                     <AttendanceChart data={stats.attendanceData} />
                 </div>
             </div>
 
             {/* Recent Activity Table */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100">
-                    <h3 className="font-semibold text-gray-900">Live Activity Feed</h3>
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between">
+                    <div>
+                        <h3 className="font-bold text-gray-900 text-lg">Live Activity Feed</h3>
+                        <p className="text-sm text-gray-500 mt-0.5">Real-time member check-ins</p>
+                    </div>
+                    <div className="px-3 py-1.5 bg-emerald-100 text-emerald-700 rounded-full text-sm font-bold">
+                        {stats.todaysCheckins} today
+                    </div>
                 </div>
                 <div className="divide-y divide-gray-100">
                     {stats.recentActivity.length === 0 ? (
-                        <div className="p-8 text-center text-gray-400">No activity today.</div>
+                        <div className="p-12 text-center">
+                            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Activity className="w-8 h-8 text-gray-400" />
+                            </div>
+                            <p className="text-gray-900 font-medium mb-1">No activity yet</p>
+                            <p className="text-sm text-gray-500">Check-ins will appear here</p>
+                        </div>
                     ) : (
                         stats.recentActivity.map((session: any) => (
-                            <div key={session.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
-                                <div className="flex items-center gap-4">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${session.checkOutTime ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
-                                        {session.checkOutTime ? <CheckSquare className="w-5 h-5" /> : <Activity className="w-5 h-5" />}
-                                    </div>
-                                    <div>
-                                        <p className="text-sm font-bold text-gray-900">{session.userName}</p>
-                                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                                            <span className={`px-2 py-0.5 rounded-full ${session.checkOutTime ? 'bg-gray-100 text-gray-600' : 'bg-emerald-50 text-emerald-700 font-medium'}`}>
-                                                {session.checkOutTime ? 'Completed' : 'Active Session'}
-                                            </span>
-                                            {session.duration && (
-                                                <span>• {Math.floor(session.duration / 60)}h {session.duration % 60}m</span>
+                            <div key={session.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${session.checkOutTime ? 'bg-blue-100' : 'bg-emerald-100'
+                                            }`}>
+                                            {session.checkOutTime ? (
+                                                <CheckSquare className="w-6 h-6 text-blue-600" />
+                                            ) : (
+                                                <Activity className="w-6 h-6 text-emerald-600" />
                                             )}
                                         </div>
+                                        <div>
+                                            <p className="text-sm font-bold text-gray-900">{session.userName}</p>
+                                            <div className="flex items-center gap-2 mt-1">
+                                                <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${session.checkOutTime
+                                                        ? 'bg-gray-100 text-gray-700'
+                                                        : 'bg-emerald-100 text-emerald-700'
+                                                    }`}>
+                                                    {session.checkOutTime ? 'Completed' : 'Active'}
+                                                </span>
+                                                {session.duration && (
+                                                    <span className="text-xs text-gray-500">
+                                                        • {Math.floor(session.duration / 60)}h {session.duration % 60}m
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm font-medium text-gray-900 tabular-nums">
-                                        {session.checkInTime ? new Date(session.checkInTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
-                                        <span className="text-gray-300 mx-1">→</span>
-                                        {session.checkOutTime ? new Date(session.checkOutTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
-                                    </p>
-                                    <p className="text-xs text-gray-400 mt-0.5">
-                                        {new Date(session.checkInTime.seconds * 1000).toLocaleDateString()}
-                                    </p>
+                                    <div className="text-right">
+                                        <p className="text-sm font-semibold text-gray-900 tabular-nums">
+                                            {session.checkInTime ? new Date(session.checkInTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                                            <span className="text-gray-300 mx-2">→</span>
+                                            {session.checkOutTime ? new Date(session.checkOutTime.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                                        </p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            {new Date(session.checkInTime.seconds * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         ))
@@ -291,18 +357,38 @@ export default function AdminDashboard() {
     );
 }
 
-function StatsCard({ title, value, icon, bg }: { title: string, value: string | number, icon: any, bg: string }) {
+function StatsCard({
+    title,
+    value,
+    icon,
+    gradient,
+    iconBg,
+    iconColor,
+    subtitle
+}: {
+    title: string;
+    value: string | number;
+    icon: any;
+    gradient: string;
+    iconBg: string;
+    iconColor: string;
+    subtitle?: string;
+}) {
     return (
-        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between">
-                <div>
-                    <p className="text-sm font-medium text-gray-500">{title}</p>
-                    <p className="mt-2 text-3xl font-bold text-gray-900">{value}</p>
-                </div>
-                <div className={`rounded-lg p-3 ${bg}`}>
+        <div className="relative overflow-hidden rounded-2xl bg-white border border-gray-200 p-6 shadow-sm hover-lift transition-smooth">
+            <div className="flex items-start justify-between mb-4">
+                <div className={`w-12 h-12 rounded-xl ${iconBg} flex items-center justify-center ${iconColor}`}>
                     {icon}
                 </div>
             </div>
+            <div>
+                <p className="text-sm font-semibold text-gray-600 mb-1">{title}</p>
+                <p className="text-3xl font-bold text-gray-900">{value}</p>
+                {subtitle && (
+                    <p className="text-xs text-gray-500 mt-2">{subtitle}</p>
+                )}
+            </div>
+            <div className={`absolute bottom-0 right-0 w-24 h-24 bg-gradient-to-br ${gradient} opacity-5 rounded-tl-full`}></div>
         </div>
     );
 }

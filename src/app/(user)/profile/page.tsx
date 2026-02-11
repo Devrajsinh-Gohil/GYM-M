@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, updateDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
-import { Mail, MapPin, CreditCard, Calendar, LogOut, ArrowLeft, Save } from "lucide-react";
+import { Mail, MapPin, CreditCard, Calendar, LogOut, ArrowLeft, Save, Edit2, User2, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -15,7 +15,8 @@ interface UserProfile {
     status: string;
     plan?: {
         name: string;
-        expiry: any; // Timestamp
+        expiry: any;
+        price?: number;
     }
 }
 
@@ -39,14 +40,12 @@ export default function ProfilePage() {
             if (!user) return;
 
             try {
-                // Fetch User Profile
                 const userDoc = await getDoc(doc(db, "users", user.uid));
                 if (userDoc.exists()) {
                     const userData = userDoc.data() as UserProfile;
                     setProfile(userData);
                     setEditedName(userData.name);
 
-                    // Fetch Gym Details
                     if (userData.gymId) {
                         const gymDoc = await getDoc(doc(db, "gyms", userData.gymId));
                         if (gymDoc.exists()) {
@@ -92,117 +91,162 @@ export default function ProfilePage() {
     };
 
     if (loading) {
-        return <div className="p-8 text-center text-muted-foreground">Loading profile...</div>;
+        return (
+            <div className="min-h-screen flex items-center justify-center">
+                <div className="text-center">
+                    <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                    <p className="text-gray-500 font-medium">Loading profile...</p>
+                </div>
+            </div>
+        );
     }
 
     return (
-        <div className="space-y-6 pb-20">
+        <div className="space-y-6 pb-24 fade-in">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                    <Link href="/dashboard" className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-                        <ArrowLeft className="w-5 h-5 text-gray-700" />
-                    </Link>
-                    <div>
-                        <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
-                        <p className="text-gray-500 text-sm">Manage your profile</p>
+            <div className="flex items-center gap-3">
+                <Link href="/dashboard" className="p-2.5 hover:bg-gray-100 rounded-xl transition-all">
+                    <ArrowLeft className="w-5 h-5 text-gray-700" />
+                </Link>
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
+                    <p className="text-gray-600 text-sm">Manage your profile & preferences</p>
+                </div>
+            </div>
+
+            {/* Profile Hero Card */}
+            <div className="relative overflow-hidden rounded-3xl gradient-emerald p-8 text-white shadow-xl">
+                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-48 h-48 rounded-full bg-white/10 blur-3xl"></div>
+                <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-black/10 blur-3xl"></div>
+
+                <div className="relative z-10 flex items-center gap-5">
+                    <div className="w-24 h-24 rounded-3xl bg-white/20 backdrop-blur-sm flex items-center justify-center text-4xl font-bold border-4 border-white/30">
+                        {profile?.name?.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1">
+                        <h2 className="text-2xl font-bold mb-1">{profile?.name}</h2>
+                        <p className="text-emerald-100 text-sm mb-3">{profile?.email}</p>
+                        <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold ${profile?.status === 'ACTIVE'
+                                ? 'bg-white/20 backdrop-blur-sm text-white'
+                                : 'bg-amber-400 text-amber-900'
+                            }`}>
+                            <Sparkles className="w-3 h-3" />
+                            {profile?.status || "UNKNOWN"}
+                        </div>
                     </div>
                 </div>
             </div>
 
-            {/* Profile Card */}
-            <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-                <div className="flex items-center gap-4 mb-6">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center text-white text-2xl font-bold">
-                        {profile?.name?.charAt(0).toUpperCase()}
-                    </div>
-                    <div className="flex-1">
+            {/* Edit Profile Card */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100">
+                    <h3 className="font-bold text-gray-900 text-lg">Profile Information</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Update your personal details</p>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
                         {editing ? (
                             <input
                                 type="text"
                                 value={editedName}
                                 onChange={(e) => setEditedName(e.target.value)}
-                                className="text-xl font-bold text-gray-900 border-b-2 border-emerald-500 focus:outline-none w-full"
+                                className="w-full px-4 py-3 border-2 border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/20 font-medium text-gray-900"
                                 autoFocus
+                                placeholder="Enter your name"
                             />
                         ) : (
-                            <h2 className="text-xl font-bold text-gray-900">{profile?.name}</h2>
+                            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-xl">
+                                <User2 className="w-5 h-5 text-gray-500" />
+                                <span className="font-medium text-gray-900">{profile?.name}</span>
+                            </div>
                         )}
-                        <div className={`inline-block px-2 py-1 rounded-full text-xs font-bold mt-1 ${profile?.status === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                            {profile?.status || "UNKNOWN"}
-                        </div>
                     </div>
-                </div>
 
-                {/* Edit/Save Button */}
-                <div className="flex gap-2">
-                    {editing ? (
-                        <>
+                    {/* Edit/Save Buttons */}
+                    <div className="flex gap-3 pt-2">
+                        {editing ? (
+                            <>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={saving || !editedName.trim()}
+                                    className="flex-1 bg-emerald-600 text-white py-3 rounded-xl font-semibold hover:bg-emerald-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 hover-lift"
+                                >
+                                    <Save className="w-4 h-4" />
+                                    {saving ? "Saving..." : "Save Changes"}
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setEditing(false);
+                                        setEditedName(profile?.name || "");
+                                    }}
+                                    className="px-6 py-3 rounded-xl font-semibold border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all"
+                                >
+                                    Cancel
+                                </button>
+                            </>
+                        ) : (
                             <button
-                                onClick={handleSave}
-                                disabled={saving || !editedName.trim()}
-                                className="flex-1 bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                                onClick={() => setEditing(true)}
+                                className="w-full bg-gray-100 text-gray-700 py-3 rounded-xl font-semibold hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
                             >
-                                <Save className="w-4 h-4" />
-                                {saving ? "Saving..." : "Save Changes"}
+                                <Edit2 className="w-4 h-4" />
+                                Edit Profile
                             </button>
-                            <button
-                                onClick={() => {
-                                    setEditing(false);
-                                    setEditedName(profile?.name || "");
-                                }}
-                                className="px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors"
-                            >
-                                Cancel
-                            </button>
-                        </>
-                    ) : (
-                        <button
-                            onClick={() => setEditing(true)}
-                            className="w-full bg-gray-100 text-gray-700 py-2.5 rounded-lg font-medium hover:bg-gray-200 transition-colors"
-                        >
-                            Edit Profile
-                        </button>
-                    )}
+                        )}
+                    </div>
                 </div>
             </div>
 
-            {/* Account Information */}
-            <div className="rounded-xl bg-white p-6 shadow-sm border border-gray-100">
-                <h3 className="font-bold text-gray-900 mb-4">Account Information</h3>
-                <div className="space-y-4">
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <Mail className="w-5 h-5 text-gray-500" />
-                        <div className="flex-1">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Email</p>
-                            <p className="text-sm font-medium text-gray-900">{profile?.email}</p>
+            {/* Account Details */}
+            <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100">
+                    <h3 className="font-bold text-gray-900 text-lg">Account Details</h3>
+                    <p className="text-sm text-gray-500 mt-0.5">Your membership information</p>
+                </div>
+
+                <div className="p-6 space-y-3">
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                        <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <Mail className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Email Address</p>
+                            <p className="text-sm font-medium text-gray-900 truncate">{profile?.email}</p>
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <MapPin className="w-5 h-5 text-gray-500" />
-                        <div className="flex-1">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Gym</p>
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                        <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <MapPin className="w-5 h-5 text-purple-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Gym Location</p>
                             <p className="text-sm font-medium text-gray-900">{gym?.name || "No Gym Selected"}</p>
                             {gym?.location && (
-                                <p className="text-xs text-gray-500">{gym.location}</p>
+                                <p className="text-xs text-gray-500 mt-0.5">{gym.location}</p>
                             )}
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                        <CreditCard className="w-5 h-5 text-gray-500" />
-                        <div className="flex-1">
-                            <p className="text-xs text-gray-500 uppercase tracking-wide">Current Plan</p>
-                            <p className="text-sm font-medium text-gray-900">{profile?.plan?.name || "No Plan"}</p>
+                    <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                        <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                            <CreditCard className="w-5 h-5 text-emerald-600" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Membership Plan</p>
+                            <p className="text-sm font-medium text-gray-900">{profile?.plan?.name || "No Active Plan"}</p>
                         </div>
                     </div>
 
                     {profile?.plan?.expiry && (
-                        <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-                            <Calendar className="w-5 h-5 text-gray-500" />
-                            <div className="flex-1">
-                                <p className="text-xs text-gray-500 uppercase tracking-wide">Plan Expiry</p>
+                        <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
+                            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                                <Calendar className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold mb-0.5">Plan Expires</p>
                                 <p className="text-sm font-medium text-gray-900">
                                     {new Date(profile.plan.expiry.seconds * 1000).toLocaleDateString('en-US', {
                                         year: 'numeric',
@@ -219,7 +263,7 @@ export default function ProfilePage() {
             {/* Logout Button */}
             <button
                 onClick={handleLogout}
-                className="w-full bg-red-50 text-red-600 py-3 rounded-lg font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2 border border-red-200"
+                className="w-full bg-red-50 text-red-600 py-4 rounded-2xl font-bold hover:bg-red-100 transition-all flex items-center justify-center gap-2 border-2 border-red-200 hover-lift"
             >
                 <LogOut className="w-5 h-5" />
                 Logout

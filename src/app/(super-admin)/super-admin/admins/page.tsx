@@ -2,15 +2,15 @@
 
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, updateDoc, doc, getDoc } from "firebase/firestore";
-import { ShieldCheck, UserPlus, XCircle, Trash2, Building2 } from "lucide-react";
+import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
+import { ShieldCheck, UserPlus, X, Trash2, Building2, Search } from "lucide-react";
 
 interface AdminUser {
     id: string;
     name: string;
     email: string;
     gymId: string;
-    gymName?: string; // Enriched
+    gymName?: string;
 }
 
 interface Gym {
@@ -23,26 +23,21 @@ export default function AdminsPage() {
     const [gyms, setGyms] = useState<Gym[]>([]);
     const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-
-    // Form State
     const [email, setEmail] = useState("");
     const [selectedGym, setSelectedGym] = useState("");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState("");
+    const [searchQuery, setSearchQuery] = useState("");
 
     const fetchData = async () => {
         setLoading(true);
         try {
-            // 1. Fetch All Gyms (for mapping and dropdown)
             const gymsSnap = await getDocs(collection(db, "gyms"));
             const gymList = gymsSnap.docs.map(g => ({ id: g.id, ...g.data() } as Gym));
             setGyms(gymList);
 
             const gymMap = new Map(gymList.map(g => [g.id, g.name]));
 
-            // 2. Fetch All Admins (users where role == 'GX_ADMIN')
-            // Note: This requires an index in Firestore usually, or client-side filtering if small.
-            // Let's try query.
             const q = query(collection(db, "users"), where("role", "==", "GYM_ADMIN"));
             const adminsSnap = await getDocs(q);
 
@@ -74,7 +69,6 @@ export default function AdminsPage() {
         setSubmitting(true);
 
         try {
-            // 1. Find User by Email
             const q = query(collection(db, "users"), where("email", "==", email));
             const snap = await getDocs(q);
 
@@ -86,13 +80,11 @@ export default function AdminsPage() {
 
             const userDoc = snap.docs[0];
 
-            // 2. Update User Doc
             await updateDoc(doc(db, "users", userDoc.id), {
                 role: "GYM_ADMIN",
                 gymId: selectedGym
             });
 
-            // 3. Refresh
             setIsModalOpen(false);
             setEmail("");
             setSelectedGym("");
@@ -112,78 +104,98 @@ export default function AdminsPage() {
         try {
             await updateDoc(doc(db, "users", adminId), {
                 role: "USER",
-                gymId: "" // Optional: Keep gymId if they are just a member of that gym now?
-                // For simplicity, let's clear it or keep it. 
-                // If we clear it, they become a 'New User' essentially. 
-                // Best to maybe keep it if they were a member, but let's clear to be safe and they can re-onboard.
-                // Actually, if they demote, they likely shouldn't have no gym. 
-                // Let's just change role.
+                gymId: ""
             });
             fetchData();
         } catch (err) {
             console.error(err);
-            alert("Failed to  remove admin.");
+            alert("Failed to remove admin.");
         }
-    }
+    };
+
+    const filteredAdmins = admins.filter(admin =>
+        admin.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        admin.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (admin.gymName && admin.gymName.toLowerCase().includes(searchQuery.toLowerCase()))
+    );
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 pb-20 fade-in">
+            {/* Header */}
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold text-gray-900">Manage Admins</h1>
+                <div>
+                    <h1 className="text-3xl font-bold text-gray-900">Manage Admins</h1>
+                    <p className="text-gray-600 mt-1">Assign and manage gym administrators</p>
+                </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition shadow-sm"
+                    className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold shadow-sm hover-lift"
                 >
-                    <UserPlus className="w-4 h-4" />
+                    <UserPlus className="w-5 h-5" />
                     Assign Admin
                 </button>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+            {/* Search Bar */}
+            <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                    type="text"
+                    placeholder="Search admins by name, email, or gym..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-12 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
+                />
+            </div>
+
+            {/* Admins List */}
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
                 {loading ? (
-                    <div className="p-8 text-center text-gray-500">Loading admins...</div>
-                ) : admins.length === 0 ? (
-                    <div className="p-12 text-center flex flex-col items-center text-gray-500">
-                        <ShieldCheck className="w-12 h-12 mb-3 opacity-20" />
-                        <p>No Gym Admins found.</p>
+                    <div className="p-12 text-center">
+                        <div className="w-16 h-16 border-4 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+                        <p className="text-gray-500 font-medium">Loading admins...</p>
+                    </div>
+                ) : filteredAdmins.length === 0 ? (
+                    <div className="p-12 text-center">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <ShieldCheck className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <p className="text-gray-900 font-medium mb-1">
+                            {searchQuery ? "No admins found" : "No gym admins yet"}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                            {searchQuery ? "Try adjusting your search" : "Assign admin access to get started"}
+                        </p>
                     </div>
                 ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-gray-500 uppercase bg-gray-50 border-b">
-                                <tr>
-                                    <th className="px-6 py-3">Name</th>
-                                    <th className="px-6 py-3">Email</th>
-                                    <th className="px-6 py-3">Assigned Gym</th>
-                                    <th className="px-6 py-3 text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {admins.map((admin) => (
-                                    <tr key={admin.id} className="border-b hover:bg-gray-50">
-                                        <td className="px-6 py-4 font-medium text-gray-900">
-                                            {admin.name}
-                                        </td>
-                                        <td className="px-6 py-4 text-gray-500">{admin.email}</td>
-                                        <td className="px-6 py-4">
-                                            <div className="flex items-center gap-2 text-gray-700">
+                    <div className="divide-y divide-gray-100">
+                        {filteredAdmins.map((admin) => (
+                            <div key={admin.id} className="p-6 hover:bg-gray-50 transition-colors">
+                                <div className="flex items-start justify-between">
+                                    <div className="flex items-start gap-4 flex-1">
+                                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center text-white text-lg font-bold flex-shrink-0">
+                                            {admin.name.charAt(0).toUpperCase()}
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h3 className="font-bold text-gray-900 mb-1">{admin.name}</h3>
+                                            <p className="text-sm text-gray-600 mb-2">{admin.email}</p>
+                                            <div className="flex items-center gap-1.5 text-sm text-gray-700">
                                                 <Building2 className="w-4 h-4 text-gray-400" />
-                                                {admin.gymName}
+                                                <span>{admin.gymName}</span>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={() => handleDemote(admin.id)}
-                                                className="text-red-600 hover:text-red-900 hover:bg-red-50 p-2 rounded transition"
-                                                title="Remove Admin Access"
-                                            >
-                                                <Trash2 className="w-4 h-4" />
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                        </div>
+                                    </div>
+
+                                    <button
+                                        onClick={() => handleDemote(admin.id)}
+                                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors ml-4"
+                                        title="Remove Admin Access"
+                                    >
+                                        <Trash2 className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
                     </div>
                 )}
             </div>
@@ -191,41 +203,47 @@ export default function AdminsPage() {
             {/* Assign Admin Modal */}
             {isModalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-                        <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center">
-                            <h3 className="font-bold text-lg">Assign New Admin</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">
-                                <XCircle className="w-5 h-5" />
+                    <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+                        <div className="px-6 py-5 border-b border-gray-100 flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-xl text-gray-900">Assign New Admin</h3>
+                                <p className="text-sm text-gray-500 mt-0.5">Grant admin access to a user</p>
+                            </div>
+                            <button
+                                onClick={() => setIsModalOpen(false)}
+                                className="p-2 hover:bg-gray-100 rounded-xl transition-colors"
+                            >
+                                <X className="w-5 h-5 text-gray-500" />
                             </button>
                         </div>
 
                         <form onSubmit={handlePromote} className="p-6 space-y-4">
                             {error && (
-                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100">
+                                <div className="p-3 bg-red-50 text-red-600 text-sm rounded-xl border border-red-100">
                                     {error}
                                 </div>
                             )}
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">User Email</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">User Email</label>
                                 <input
                                     type="email"
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     placeholder="user@example.com"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900"
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors"
                                 />
-                                <p className="mt-1 text-xs text-gray-500">User must already be signed up in the app.</p>
+                                <p className="mt-2 text-xs text-gray-500">User must already be signed up in the app.</p>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Assign to Gym</label>
+                                <label className="block text-sm font-semibold text-gray-700 mb-2">Assign to Gym</label>
                                 <select
                                     required
                                     value={selectedGym}
                                     onChange={(e) => setSelectedGym(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-900 bg-white"
+                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-colors bg-white"
                                 >
                                     <option value="">Select a Gym...</option>
                                     {gyms.map(g => (
@@ -238,14 +256,14 @@ export default function AdminsPage() {
                                 <button
                                     type="button"
                                     onClick={() => setIsModalOpen(false)}
-                                    className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition font-medium"
+                                    className="flex-1 px-4 py-3 text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition-all font-semibold"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
                                     disabled={submitting}
-                                    className="flex-1 px-4 py-2 bg-slate-900 text-white rounded-lg hover:bg-slate-800 transition font-medium"
+                                    className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold disabled:opacity-50"
                                 >
                                     {submitting ? "Assigning..." : "Assign Access"}
                                 </button>

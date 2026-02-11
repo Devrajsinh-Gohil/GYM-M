@@ -5,7 +5,7 @@ import { Scanner } from "@yudiel/react-qr-scanner";
 import { useAuth } from "@/context/AuthContext";
 import { processAttendance, AttendanceResult } from "@/lib/attendance";
 import { useRouter } from "next/navigation";
-import { CheckCircle, XCircle, ArrowLeft, Camera } from "lucide-react";
+import { CheckCircle, XCircle, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 export default function ScanPage() {
@@ -29,14 +29,12 @@ export default function ScanPage() {
                 if (savedId && vDevices.find(d => d.deviceId === savedId)) {
                     setActiveDeviceId(savedId);
                 } else {
-                    // Default to first camera (Camera 0)
                     setActiveDeviceId(vDevices[0].deviceId);
                 }
             }
             setIsCameraActive(true);
         } catch (err: any) {
             console.error("Error enumerating devices:", err);
-            // Fallback to letting the scanner decide or use environment facing mode
             setIsCameraActive(true);
         }
     };
@@ -68,39 +66,47 @@ export default function ScanPage() {
         }
     };
 
-    // RENDER ERROR IF PRESENT (Fatal errors that block the UI)
-    if (error && !result && !isCameraActive) {
-        // Only show fatal errors here if camera failed to start or permission denied
-        // scanning errors are handled in the scanner view
-    }
-
     return (
-        <div className="flex flex-col min-h-screen bg-black text-white">
+        <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
             {/* Header */}
-            <div className="p-4 flex items-center justify-between">
-                <div className="flex items-center">
-                    <Link href="/dashboard" className="p-2 bg-white/10 rounded-full">
-                        <ArrowLeft className="w-6 h-6" />
+            <div className="p-5 flex items-center justify-between backdrop-blur-sm bg-white/5">
+                <div className="flex items-center gap-3">
+                    <Link href="/dashboard" className="p-2.5 bg-white/10 hover:bg-white/20 rounded-xl transition-all">
+                        <ArrowLeft className="w-5 h-5" />
                     </Link>
-                    <h1 className="ml-4 text-lg font-bold">Scan Gym QR</h1>
+                    <div>
+                        <h1 className="text-lg font-bold">QR Scanner</h1>
+                        <p className="text-xs text-gray-400">Check in/out instantly</p>
+                    </div>
+                </div>
+                <div className="w-10 h-10 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                    <Sparkles className="w-5 h-5 text-emerald-400" />
                 </div>
             </div>
 
-            <div className="flex-1 flex flex-col items-center justify-center p-4 relative">
+            <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
                 {result ? (
                     // Result View
-                    <div className="text-center space-y-4 animate-in fade-in zoom-in">
-                        {result.success ? (
-                            <CheckCircle className="w-24 h-24 text-emerald-500 mx-auto" />
-                        ) : (
-                            <XCircle className="w-24 h-24 text-red-500 mx-auto" />
-                        )}
-                        <h2 className="text-2xl font-bold">{result.type === 'CHECK_IN' ? 'Checked In!' : 'Checked Out!'}</h2>
-                        <p className="text-gray-400">{result.message}</p>
+                    <div className="text-center space-y-6 fade-in">
+                        <div className={`w-28 h-28 mx-auto rounded-full flex items-center justify-center ${result.success ? 'bg-emerald-500/20' : 'bg-red-500/20'
+                            }`}>
+                            {result.success ? (
+                                <CheckCircle className="w-16 h-16 text-emerald-400" />
+                            ) : (
+                                <XCircle className="w-16 h-16 text-red-400" />
+                            )}
+                        </div>
+
+                        <div>
+                            <h2 className="text-3xl font-bold mb-2">
+                                {result.type === 'CHECK_IN' ? 'Checked In!' : 'Checked Out!'}
+                            </h2>
+                            <p className="text-gray-400 text-lg">{result.message}</p>
+                        </div>
 
                         <button
                             onClick={() => router.push('/dashboard')}
-                            className="mt-8 px-8 py-3 bg-white text-black font-bold rounded-full"
+                            className="mt-8 px-10 py-4 bg-white text-gray-900 font-bold rounded-2xl hover:bg-gray-100 transition-all hover-lift shadow-xl"
                         >
                             Back to Dashboard
                         </button>
@@ -108,71 +114,92 @@ export default function ScanPage() {
                 ) : (
                     <>
                         {!isCameraActive ? (
-                            <div className="text-center">
-                                <div className="w-24 h-24 bg-gray-800 rounded-full flex items-center justify-center mx-auto mb-6">
-                                    <Camera className="w-10 h-10 text-gray-400" />
+                            <div className="text-center max-w-sm fade-in">
+                                <div className="w-32 h-32 bg-gradient-to-br from-emerald-500/20 to-blue-500/20 rounded-3xl flex items-center justify-center mx-auto mb-8 relative">
+                                    <div className="absolute inset-0 bg-emerald-500/10 rounded-3xl animate-pulse"></div>
+                                    <Camera className="w-16 h-16 text-emerald-400 relative z-10" />
                                 </div>
-                                <h2 className="text-xl font-bold mb-2">Ready to Scan?</h2>
-                                <p className="text-gray-400 mb-8 max-w-xs mx-auto">
-                                    Click below to open the camera and scan the gym's QR code.
+
+                                <h2 className="text-2xl font-bold mb-3">Ready to Scan?</h2>
+                                <p className="text-gray-400 mb-10 leading-relaxed">
+                                    Point your camera at the gym's QR code to check in or out instantly.
                                 </p>
+
                                 <button
                                     onClick={startCamera}
-                                    className="px-8 py-3 bg-blue-600 text-white font-bold rounded-full hover:bg-blue-700 transition"
+                                    className="w-full px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-500 transition-all hover-lift shadow-xl"
                                 >
                                     Open Camera
                                 </button>
-                                {error && <p className="mt-4 text-red-500 text-sm">{error}</p>}
+
+                                {error && (
+                                    <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl">
+                                        <p className="text-red-400 text-sm">{error}</p>
+                                    </div>
+                                )}
                             </div>
                         ) : (
                             // Scanner View
-                            <div className="w-full max-w-sm flex flex-col items-center">
-                                <div className="w-full aspect-square relative overflow-hidden rounded-2xl border-2 border-white/20 mb-4">
+                            <div className="w-full max-w-md flex flex-col items-center fade-in">
+                                <div className="w-full aspect-square relative overflow-hidden rounded-3xl border-4 border-white/10 mb-6 shadow-2xl">
                                     <Scanner
                                         onScan={handleScan}
                                         onError={(err: any) => {
                                             console.error(err);
-                                            // Don't show confusing errors to user immediately, just log
-                                            // setError(err?.message || "Camera error");
                                         }}
-                                        // Use specific device ID if found (multicamera phones), else environment
                                         constraints={{
                                             deviceId: activeDeviceId,
-                                            aspectRatio: 1, // Force square aspect ratio
+                                            aspectRatio: 1,
                                         }}
                                         formats={['qr_code']}
                                         components={{ onOff: true, torch: true }}
                                     />
-                                    <div className="absolute inset-0 border-[30px] border-black/50 pointer-events-none"></div>
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-lg animate-pulse"></div>
+
+                                    {/* Scanning Frame Overlay */}
+                                    <div className="absolute inset-0 pointer-events-none">
+                                        {/* Dark overlay with cutout */}
+                                        <div className="absolute inset-0 border-[40px] border-black/60"></div>
+
+                                        {/* Animated scanning frame */}
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="w-56 h-56 border-4 border-emerald-400 rounded-2xl relative">
+                                                {/* Corner accents */}
+                                                <div className="absolute -top-1 -left-1 w-8 h-8 border-t-4 border-l-4 border-emerald-400 rounded-tl-2xl"></div>
+                                                <div className="absolute -top-1 -right-1 w-8 h-8 border-t-4 border-r-4 border-emerald-400 rounded-tr-2xl"></div>
+                                                <div className="absolute -bottom-1 -left-1 w-8 h-8 border-b-4 border-l-4 border-emerald-400 rounded-bl-2xl"></div>
+                                                <div className="absolute -bottom-1 -right-1 w-8 h-8 border-b-4 border-r-4 border-emerald-400 rounded-br-2xl"></div>
+
+                                                {/* Scanning line animation */}
+                                                <div className="absolute top-0 left-0 right-0 h-1 bg-emerald-400 animate-pulse"></div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                                <p className="text-sm text-gray-400 text-center mb-4">
-                                    Align the code within the frame
+
+                                <p className="text-sm text-gray-400 text-center mb-6 px-4">
+                                    Position the QR code within the frame
                                 </p>
 
-                                <div className="flex gap-4">
-                                    <button
-                                        onClick={() => {
-                                            // Cycle to next camera
-                                            if (videoDevices.length > 1) {
+                                <div className="flex gap-3 w-full">
+                                    {videoDevices.length > 1 && (
+                                        <button
+                                            onClick={() => {
                                                 const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
                                                 const nextIndex = (currentIndex + 1) % videoDevices.length;
                                                 const nextDeviceId = videoDevices[nextIndex].deviceId;
                                                 setActiveDeviceId(nextDeviceId);
                                                 localStorage.setItem("gym-platform-camera-id", nextDeviceId);
-                                            }
-                                        }}
-                                        className="px-6 py-2 bg-gray-800 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-gray-700 transition"
-                                    >
-                                        <Camera className="w-4 h-4" />
-                                        Switch Camera ({videoDevices.findIndex(d => d.deviceId === activeDeviceId) + 1}/{videoDevices.length})
-                                    </button>
+                                            }}
+                                            className="flex-1 px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/20 transition-all"
+                                        >
+                                            <Camera className="w-4 h-4" />
+                                            Switch ({videoDevices.findIndex(d => d.deviceId === activeDeviceId) + 1}/{videoDevices.length})
+                                        </button>
+                                    )}
 
                                     <button
                                         onClick={() => { setIsCameraActive(false); setError(""); }}
-                                        className="px-6 py-2 bg-gray-800/50 rounded-full text-sm font-medium text-gray-400 hover:bg-gray-800 transition"
+                                        className="flex-1 px-5 py-3 bg-white/5 backdrop-blur-sm rounded-xl text-sm font-semibold text-gray-400 hover:bg-white/10 hover:text-white transition-all"
                                     >
                                         Cancel
                                     </button>
