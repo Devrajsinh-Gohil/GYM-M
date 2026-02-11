@@ -16,15 +16,17 @@ export default function ScanPage() {
     const [error, setError] = useState("");
     const [isCameraActive, setIsCameraActive] = useState(false);
     const [activeDeviceId, setActiveDeviceId] = useState<string | undefined>(undefined);
+    const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
 
     const startCamera = async () => {
         try {
             const devices = await navigator.mediaDevices.enumerateDevices();
-            const videoDevices = devices.filter(d => d.kind === 'videoinput');
+            const vDevices = devices.filter(d => d.kind === 'videoinput');
+            setVideoDevices(vDevices);
 
-            if (videoDevices.length > 0) {
-                // User confirmed Camera 0 works
-                setActiveDeviceId(videoDevices[0].deviceId);
+            if (vDevices.length > 0) {
+                // Default to first camera (Camera 0)
+                setActiveDeviceId(vDevices[0].deviceId);
             }
             setIsCameraActive(true);
         } catch (err: any) {
@@ -129,7 +131,10 @@ export default function ScanPage() {
                                             // setError(err?.message || "Camera error");
                                         }}
                                         // Use specific device ID if found (multicamera phones), else environment
-                                        constraints={activeDeviceId ? { deviceId: activeDeviceId } : { facingMode: 'environment' }}
+                                        constraints={{
+                                            deviceId: activeDeviceId,
+                                            aspectRatio: 1, // Force square aspect ratio
+                                        }}
                                         formats={['qr_code']}
                                         components={{ onOff: true, torch: true }}
                                     />
@@ -138,15 +143,33 @@ export default function ScanPage() {
                                         <div className="w-48 h-48 border-2 border-emerald-500/50 rounded-lg animate-pulse"></div>
                                     </div>
                                 </div>
-                                <p className="text-sm text-gray-400 text-center">
+                                <p className="text-sm text-gray-400 text-center mb-4">
                                     Align the code within the frame
                                 </p>
-                                <button
-                                    onClick={() => { setIsCameraActive(false); setError(""); }}
-                                    className="mt-6 text-sm text-gray-500 underline"
-                                >
-                                    Cancel
-                                </button>
+
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => {
+                                            // Cycle to next camera
+                                            if (videoDevices.length > 1) {
+                                                const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
+                                                const nextIndex = (currentIndex + 1) % videoDevices.length;
+                                                setActiveDeviceId(videoDevices[nextIndex].deviceId);
+                                            }
+                                        }}
+                                        className="px-6 py-2 bg-gray-800 rounded-full text-sm font-medium flex items-center gap-2 hover:bg-gray-700 transition"
+                                    >
+                                        <Camera className="w-4 h-4" />
+                                        Switch Camera ({videoDevices.findIndex(d => d.deviceId === activeDeviceId) + 1}/{videoDevices.length})
+                                    </button>
+
+                                    <button
+                                        onClick={() => { setIsCameraActive(false); setError(""); }}
+                                        className="px-6 py-2 bg-gray-800/50 rounded-full text-sm font-medium text-gray-400 hover:bg-gray-800 transition"
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
                             </div>
                         )}
                     </>
