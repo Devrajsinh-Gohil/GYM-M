@@ -223,7 +223,6 @@ export default function ScanPage() {
                                                 const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
                                                 const nextIndex = (currentIndex + 1) % videoDevices.length;
                                                 const nextDeviceId = videoDevices[nextIndex].deviceId;
-                                                const nextDeviceId = videoDevices[nextIndex].deviceId;
                                                 setActiveDeviceId(nextDeviceId);
                                                 setCookie("gym-platform-camera-id", nextDeviceId, 365);
                                             }}
