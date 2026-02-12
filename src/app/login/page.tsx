@@ -6,11 +6,13 @@ import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 export default function LoginPage() {
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
 
     // Detect if running in WebView
     const isWebView = () => {
@@ -139,7 +141,16 @@ export default function LoginPage() {
         };
 
         checkRedirectResult();
+        checkRedirectResult();
     }, []);
+
+    // Auto-redirect if already logged in (persistence check)
+    useEffect(() => {
+        if (!authLoading && user) {
+            console.log("User already logged in, redirecting...", user.email);
+            handleUserData(user);
+        }
+    }, [user, authLoading]);
 
     const handleGoogleLogin = async () => {
         setError("");
