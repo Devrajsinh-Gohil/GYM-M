@@ -29,7 +29,19 @@ export default function ScanPage() {
                 if (savedId && vDevices.find(d => d.deviceId === savedId)) {
                     setActiveDeviceId(savedId);
                 } else {
-                    setActiveDeviceId(vDevices[0].deviceId);
+                    // Prefer back camera (environment-facing) for QR scanning
+                    const backCamera = vDevices.find(d =>
+                        d.label.toLowerCase().includes('back') ||
+                        d.label.toLowerCase().includes('rear') ||
+                        d.label.toLowerCase().includes('environment')
+                    );
+
+                    if (backCamera) {
+                        setActiveDeviceId(backCamera.deviceId);
+                    } else {
+                        // Fallback: use last camera (usually back camera on mobile)
+                        setActiveDeviceId(vDevices[vDevices.length - 1].deviceId);
+                    }
                 }
             }
             setIsCameraActive(true);
