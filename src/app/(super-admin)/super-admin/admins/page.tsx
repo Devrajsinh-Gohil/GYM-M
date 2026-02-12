@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, updateDoc, doc } from "firebase/firestore";
-import { ShieldCheck, UserPlus, X, Trash2, Building2, Search } from "lucide-react";
+import { ShieldCheck, UserPlus, X, Trash2, Building2, Search, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 interface AdminUser {
     id: string;
@@ -122,17 +123,24 @@ export default function AdminsPage() {
     return (
         <div className="space-y-6 pb-20 fade-in">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Manage Admins</h1>
-                    <p className="text-gray-600 mt-1">Assign and manage gym administrators</p>
+            <div className="flex items-start gap-3">
+                <Link
+                    href="/super-admin/dashboard"
+                    className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0 mt-1"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </Link>
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Manage Admins</h1>
+                    <p className="text-gray-600 mt-1 text-sm sm:text-base">Assign and manage gym administrators</p>
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold shadow-sm hover-lift"
+                    className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold shadow-sm hover-lift flex-shrink-0 text-sm sm:text-base"
                 >
-                    <UserPlus className="w-5 h-5" />
-                    Assign Admin
+                    <UserPlus className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="hidden sm:inline">Assign Admin</span>
+                    <span className="sm:hidden">Assign</span>
                 </button>
             </div>
 

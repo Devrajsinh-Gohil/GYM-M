@@ -4,7 +4,8 @@ import { useState, useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
 import { collection, getDocs, addDoc, updateDoc, doc, serverTimestamp, query, orderBy } from "firebase/firestore";
-import { Plus, MapPin, Building2, X, Search, Power, PowerOff } from "lucide-react";
+import { Plus, MapPin, Building2, X, Search, Power, PowerOff, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 interface Gym {
     id: string;
@@ -88,19 +89,27 @@ export default function GymsPage() {
     return (
         <div className="space-y-6 pb-20 fade-in">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900">Gym Management</h1>
-                    <p className="text-gray-600 mt-1">Manage all registered gyms</p>
+            <div className="flex items-start gap-3">
+                <Link
+                    href="/super-admin/dashboard"
+                    className="p-2 hover:bg-gray-100 rounded-xl text-gray-500 hover:text-gray-900 transition-colors flex-shrink-0 mt-1"
+                >
+                    <ArrowLeft className="w-5 h-5" />
+                </Link>
+                <div className="flex-1 min-w-0">
+                    <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Gym Management</h1>
+                    <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage all registered gyms</p>
                 </div>
                 <button
                     onClick={() => setIsModalOpen(true)}
-                    className="flex items-center gap-2 px-5 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold shadow-sm hover-lift"
+                    className="flex items-center gap-2 px-3 sm:px-5 py-2 sm:py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all font-semibold shadow-sm hover-lift flex-shrink-0 text-sm sm:text-base"
                 >
-                    <Plus className="w-5 h-5" />
-                    Add Gym
+                    <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="hidden sm:inline">Add Gym</span>
+                    <span className="sm:hidden">Add</span>
                 </button>
             </div>
+
 
             {/* Search Bar */}
             <div className="relative">
@@ -167,8 +176,8 @@ export default function GymsPage() {
                                         <button
                                             onClick={() => toggleStatus(gym)}
                                             className={`p-2 rounded-lg transition-colors ${gym.active
-                                                    ? "text-red-600 hover:bg-red-50"
-                                                    : "text-emerald-600 hover:bg-emerald-50"
+                                                ? "text-red-600 hover:bg-red-50"
+                                                : "text-emerald-600 hover:bg-emerald-50"
                                                 }`}
                                             title={gym.active ? "Disable gym" : "Enable gym"}
                                         >

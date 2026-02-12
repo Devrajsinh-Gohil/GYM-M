@@ -208,7 +208,7 @@ export default function AdminDashboard() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                 <StatsCard
                     title="Total Members"
                     value={stats.totalMembers}
@@ -324,8 +324,8 @@ export default function AdminDashboard() {
                                             <p className="text-sm font-bold text-gray-900">{session.userName}</p>
                                             <div className="flex items-center gap-2 mt-1">
                                                 <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${session.checkOutTime
-                                                        ? 'bg-gray-100 text-gray-700'
-                                                        : 'bg-emerald-100 text-emerald-700'
+                                                    ? 'bg-gray-100 text-gray-700'
+                                                    : 'bg-emerald-100 text-emerald-700'
                                                     }`}>
                                                     {session.checkOutTime ? 'Completed' : 'Active'}
                                                 </span>
