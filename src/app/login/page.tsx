@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { useState, useEffect } from "react";
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 export default function LoginPage() {
@@ -13,15 +12,16 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
-    const handleGoogleLogin = async () => {
-        setError("");
-        setLoading(true);
+    // Detect if running in WebView
+    const isWebView = () => {
+        if (globalThis.window === undefined) return false;
+        const userAgent = navigator.userAgent || '';
+        return /GymMemberApp/.test(userAgent);
+    };
 
+    // Handle user data after successful authentication
+    const handleUserData = async (user: any) => {
         try {
-            const provider = new GoogleAuthProvider();
-            const result = await signInWithPopup(auth, provider);
-            const user = result.user;
-
             // Check if user exists in Firestore
             const userDocRef = doc(db, "users", user.uid);
             const userDoc = await getDoc(userDocRef);
@@ -71,11 +71,6 @@ export default function LoginPage() {
                     photoURL: user.photoURL,
                     gymId: newGymId
                 });
-
-                // Continue to redirect logic below...
-                // Force a quick refresh of our local variables for the next block
-                // OR just manually set them
-                // Better: Just proceed and let the next block handle it
             }
 
             // Fetch latest data (or use what we just created)
@@ -102,9 +97,56 @@ export default function LoginPage() {
                 setError("Your account is not active. Please contact support.");
             }
         } catch (err: any) {
+            console.error("Error handling user data:", err);
+            setError("Failed to process user data. Please try again.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // Check for redirect result on page load (for WebView)
+    useEffect(() => {
+        const checkRedirectResult = async () => {
+            try {
+                setLoading(true);
+                const result = await getRedirectResult(auth);
+                if (result?.user) {
+                    console.log("Redirect result received:", result.user.email);
+                    await handleUserData(result.user);
+                } else {
+                    setLoading(false);
+                }
+            } catch (err: any) {
+                console.error("Redirect error:", err);
+                setError("Failed to complete sign in. Please try again.");
+                setLoading(false);
+            }
+        };
+
+        checkRedirectResult();
+    }, []);
+
+    const handleGoogleLogin = async () => {
+        setError("");
+        setLoading(true);
+
+        try {
+            const provider = new GoogleAuthProvider();
+
+            if (isWebView()) {
+                // Use redirect for WebView (mobile app)
+                console.log("Using redirect flow for WebView");
+                await signInWithRedirect(auth, provider);
+                // Note: The page will reload and useEffect will handle the result
+            } else {
+                // Use popup for web browsers
+                console.log("Using popup flow for web");
+                const result = await signInWithPopup(auth, provider);
+                await handleUserData(result.user);
+            }
+        } catch (err: any) {
             console.error(err);
             setError("Failed to sign in with Google. Please try again.");
-        } finally {
             setLoading(false);
         }
     };
