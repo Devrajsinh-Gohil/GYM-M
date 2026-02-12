@@ -8,6 +8,30 @@ import { useRouter } from "next/navigation";
 import { CheckCircle, XCircle, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import Link from "next/link";
 
+// Cookie helpers since we don't need a heavy library for this
+function setCookie(name: string, value: string, days: number) {
+    if (typeof document === 'undefined') return;
+    let expires = "";
+    if (days) {
+        const date = new Date();
+        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+        expires = "; expires=" + date.toUTCString();
+    }
+    document.cookie = name + "=" + (value || "") + expires + "; path=/";
+}
+
+function getCookie(name: string) {
+    if (typeof document === 'undefined') return null;
+    const nameEQ = name + "=";
+    const ca = document.cookie.split(';');
+    for (let i = 0; i < ca.length; i++) {
+        let c = ca[i];
+        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+        if (typeof c === 'string' && c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
+    }
+    return null;
+}
+
 export default function ScanPage() {
     const { user } = useAuth();
     const router = useRouter();
@@ -25,7 +49,7 @@ export default function ScanPage() {
             setVideoDevices(vDevices);
 
             if (vDevices.length > 0) {
-                const savedId = localStorage.getItem("gym-platform-camera-id");
+                const savedId = getCookie("gym-platform-camera-id");
                 if (savedId && vDevices.find(d => d.deviceId === savedId)) {
                     setActiveDeviceId(savedId);
                 } else {
@@ -199,8 +223,9 @@ export default function ScanPage() {
                                                 const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
                                                 const nextIndex = (currentIndex + 1) % videoDevices.length;
                                                 const nextDeviceId = videoDevices[nextIndex].deviceId;
+                                                const nextDeviceId = videoDevices[nextIndex].deviceId;
                                                 setActiveDeviceId(nextDeviceId);
-                                                localStorage.setItem("gym-platform-camera-id", nextDeviceId);
+                                                setCookie("gym-platform-camera-id", nextDeviceId, 365);
                                             }}
                                             className="flex-1 px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/20 transition-all"
                                         >
