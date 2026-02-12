@@ -79,21 +79,36 @@ export default function LoginPage() {
             const role = userData?.role || "USER";
             const status = userData?.status || "PENDING";
 
+            console.log(`User authenticated: role=${role}, status=${status}`);
+
+            // CRITICAL: Admins and Super Admins should NEVER go to onboarding
+            // Check role first before status
+
+            if (role === "SUPER_ADMIN") {
+                console.log("Redirecting Super Admin to dashboard");
+                router.push("/super-admin/dashboard");
+                return;
+            }
+
+            if (role === "GYM_ADMIN") {
+                console.log("Redirecting Gym Admin to dashboard");
+                router.push("/admin/dashboard");
+                return;
+            }
+
+            // For regular users, check status
             if (status === "ONBOARDING") {
+                console.log("Redirecting user to onboarding");
                 router.push("/onboarding");
             } else if (status === "PENDING") {
+                console.log("Redirecting user to pending approval");
                 router.push("/pending");
             } else if (status === "ACTIVE") {
-                // Role-Based Redirect for Active Users
-                if (role === "SUPER_ADMIN") {
-                    router.push("/super-admin/dashboard");
-                } else if (role === "GYM_ADMIN") {
-                    router.push("/admin/dashboard");
-                } else {
-                    router.push("/dashboard");
-                }
+                console.log("Redirecting active user to dashboard");
+                router.push("/dashboard");
             } else {
                 // Rejected or other status
+                console.error(`Invalid user status: ${status}`);
                 setError("Your account is not active. Please contact support.");
             }
         } catch (err: any) {
