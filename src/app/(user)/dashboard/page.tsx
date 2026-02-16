@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/context/AuthContext";
 import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, orderBy, limit, getDocs } from "firebase/firestore";
+import { doc, getDoc, collection, query, where, orderBy, limit, getDocs, getCountFromServer } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { MapPin, Calendar, Activity, CreditCard, Settings, TrendingUp, Clock, CheckCircle2, Sparkles } from "lucide-react";
 import Link from "next/link";
@@ -30,6 +30,7 @@ export default function UserDashboard() {
     const [gym, setGym] = useState<GymDetails | null>(null);
     const [loading, setLoading] = useState(true);
     const [attendance, setAttendance] = useState<any[]>([]);
+    const [totalSessions, setTotalSessions] = useState(0);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -58,6 +59,15 @@ export default function UserDashboard() {
                 const attSnap = await getDocs(attQuery);
                 const attList = attSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setAttendance(attList);
+
+                // Fetch total completed sessions count
+                const countQuery = query(
+                    collection(db, "attendance"),
+                    where("userId", "==", user.uid),
+                    where("status", "==", "COMPLETED")
+                );
+                const snapshot = await getCountFromServer(countQuery);
+                setTotalSessions(snapshot.data().count);
 
             } catch (error) {
                 console.error("Error fetching dashboard data:", error);
@@ -88,7 +98,7 @@ export default function UserDashboard() {
     };
 
     const daysLeft = getDaysLeft();
-    const completedSessions = attendance.filter((a: any) => a.status === 'COMPLETED').length;
+
 
     return (
         <div className="space-y-6 pb-24 fade-in">
@@ -113,39 +123,39 @@ export default function UserDashboard() {
             {/* Status Alert */}
             {daysLeft !== null && (
                 <div className={`rounded-2xl p-5 border-2 ${daysLeft < 0
-                        ? 'bg-red-50 border-red-200'
-                        : daysLeft <= 7
-                            ? 'bg-amber-50 border-amber-200'
-                            : 'bg-emerald-50 border-emerald-200'
+                    ? 'bg-red-50 border-red-200'
+                    : daysLeft <= 7
+                        ? 'bg-amber-50 border-amber-200'
+                        : 'bg-emerald-50 border-emerald-200'
                     }`}>
                     <div className="flex items-start gap-4">
                         <div className={`p-3 rounded-xl ${daysLeft < 0
-                                ? 'bg-red-100'
-                                : daysLeft <= 7
-                                    ? 'bg-amber-100'
-                                    : 'bg-emerald-100'
+                            ? 'bg-red-100'
+                            : daysLeft <= 7
+                                ? 'bg-amber-100'
+                                : 'bg-emerald-100'
                             }`}>
                             <Calendar className={`w-6 h-6 ${daysLeft < 0
-                                    ? 'text-red-600'
-                                    : daysLeft <= 7
-                                        ? 'text-amber-600'
-                                        : 'text-emerald-600'
+                                ? 'text-red-600'
+                                : daysLeft <= 7
+                                    ? 'text-amber-600'
+                                    : 'text-emerald-600'
                                 }`} />
                         </div>
                         <div className="flex-1">
                             <h3 className={`font-bold text-lg ${daysLeft < 0
-                                    ? 'text-red-900'
-                                    : daysLeft <= 7
-                                        ? 'text-amber-900'
-                                        : 'text-emerald-900'
+                                ? 'text-red-900'
+                                : daysLeft <= 7
+                                    ? 'text-amber-900'
+                                    : 'text-emerald-900'
                                 }`}>
                                 {daysLeft < 0 ? 'Membership Expired' : daysLeft <= 7 ? 'Expiring Soon' : 'Active Membership'}
                             </h3>
                             <p className={`text-sm mt-1 ${daysLeft < 0
-                                    ? 'text-red-700'
-                                    : daysLeft <= 7
-                                        ? 'text-amber-700'
-                                        : 'text-emerald-700'
+                                ? 'text-red-700'
+                                : daysLeft <= 7
+                                    ? 'text-amber-700'
+                                    : 'text-emerald-700'
                                 }`}>
                                 {daysLeft < 0
                                     ? `Your plan expired ${Math.abs(daysLeft)} days ago. Please renew at the desk.`
@@ -175,8 +185,8 @@ export default function UserDashboard() {
                             </div>
                         </div>
                         <div className={`px-4 py-2 rounded-full text-sm font-bold ${profile?.status === 'ACTIVE'
-                                ? 'bg-white/20 backdrop-blur-sm text-white'
-                                : 'bg-amber-400 text-amber-900'
+                            ? 'bg-white/20 backdrop-blur-sm text-white'
+                            : 'bg-amber-400 text-amber-900'
                             }`}>
                             {profile?.status || "UNKNOWN"}
                         </div>
@@ -218,7 +228,7 @@ export default function UserDashboard() {
                         </div>
                     </div>
                     <p className="text-sm text-gray-600 font-medium mb-1">Sessions</p>
-                    <p className="text-xl font-bold text-gray-900">{completedSessions}</p>
+                    <p className="text-xl font-bold text-gray-900">{totalSessions}</p>
                     <p className="text-xs text-gray-500 mt-2">Completed</p>
                 </div>
             </div>
@@ -249,8 +259,8 @@ export default function UserDashboard() {
                             <div key={session.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
                                 <div className="flex items-start gap-4">
                                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center flex-shrink-0 ${session.checkOutTime
-                                            ? 'bg-blue-100'
-                                            : 'bg-emerald-100'
+                                        ? 'bg-blue-100'
+                                        : 'bg-emerald-100'
                                         }`}>
                                         {session.checkOutTime ? (
                                             <CheckCircle2 className="w-6 h-6 text-blue-600" />
@@ -265,8 +275,8 @@ export default function UserDashboard() {
                                                 {session.checkOutTime ? 'Workout Completed' : 'Active Session'}
                                             </p>
                                             <span className={`text-xs font-bold px-3 py-1 rounded-full ${session.checkOutTime
-                                                    ? 'bg-gray-100 text-gray-700'
-                                                    : 'bg-emerald-100 text-emerald-700'
+                                                ? 'bg-gray-100 text-gray-700'
+                                                : 'bg-emerald-100 text-emerald-700'
                                                 }`}>
                                                 {session.checkOutTime ? 'Done' : 'Active'}
                                             </span>
