@@ -7,6 +7,7 @@ import { processAttendance, AttendanceResult } from "@/lib/attendance";
 import { useRouter } from "next/navigation";
 import { CheckCircle, XCircle, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { isRunningInWebView } from "@/lib/utils";
 
 export default function ScanPage() {
     const { user } = useAuth();
@@ -18,6 +19,7 @@ export default function ScanPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [cameraId, setCameraId] = useState<string | null>(null);
     const [availableCameras, setAvailableCameras] = useState<{ id: string; label: string }[]>([]);
+    const [isWebView] = useState(isRunningInWebView());
 
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const scannerDivId = "qr-reader";
@@ -30,6 +32,59 @@ export default function ScanPage() {
             }
         };
     }, []);
+
+    // Listen for messages from React Native WebView
+    useEffect(() => {
+        if (!isWebView) return;
+
+        const handleMessage = (event: MessageEvent) => {
+            if (event.data?.type === 'QR_SCANNED') {
+                handleQRCode(event.data.data);
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }, [isWebView, user, result, isProcessing]);
+
+    // Handle QR code from either web or native scanner
+    const handleQRCode = async (decodedText: string) => {
+        if (isProcessing || !user || result) return;
+
+        setIsProcessing(true);
+
+        try {
+            let gymId = decodedText;
+            try {
+                const data = JSON.parse(decodedText);
+                if (data.gymId) gymId = data.gymId;
+            } catch (e) {
+                // Not JSON, treat as raw ID
+            }
+
+            const response = await processAttendance(user.uid, gymId);
+            setResult(response);
+
+            // Stop web scanner if active
+            if (scannerRef.current?.isScanning) {
+                await scannerRef.current.stop();
+            }
+        } catch (err) {
+            console.error(err);
+            setError("Invalid QR Code");
+        } finally {
+            setIsProcessing(false);
+        }
+    };
+
+    // Request native scanner from React Native
+    const openNativeScanner = () => {
+        if (typeof window !== 'undefined' && (window as any).ReactNativeWebView) {
+            (window as any).ReactNativeWebView.postMessage(JSON.stringify({
+                type: 'OPEN_NATIVE_SCANNER'
+            }));
+        }
+    };
 
     const startCamera = async () => {
         setIsLoading(true);
@@ -303,7 +358,7 @@ export default function ScanPage() {
                                 </p>
 
                                 <button
-                                    onClick={startCamera}
+                                    onClick={isWebView ? openNativeScanner : startCamera}
                                     disabled={isLoading}
                                     className="w-full px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-500 transition-all hover-lift shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
