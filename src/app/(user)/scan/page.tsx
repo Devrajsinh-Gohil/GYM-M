@@ -1,36 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { Scanner } from "@yudiel/react-qr-scanner";
+import { useState, useEffect, useRef } from "react";
+import { Html5Qrcode } from "html5-qrcode";
 import { useAuth } from "@/context/AuthContext";
 import { processAttendance, AttendanceResult } from "@/lib/attendance";
 import { useRouter } from "next/navigation";
 import { CheckCircle, XCircle, ArrowLeft, Camera, Sparkles } from "lucide-react";
 import Link from "next/link";
-
-// Cookie helpers since we don't need a heavy library for this
-function setCookie(name: string, value: string, days: number) {
-    if (typeof document === 'undefined') return;
-    let expires = "";
-    if (days) {
-        const date = new Date();
-        date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
-        expires = "; expires=" + date.toUTCString();
-    }
-    document.cookie = name + "=" + (value || "") + expires + "; path=/";
-}
-
-function getCookie(name: string) {
-    if (typeof document === 'undefined') return null;
-    const nameEQ = name + "=";
-    const ca = document.cookie.split(';');
-    for (let i = 0; i < ca.length; i++) {
-        let c = ca[i];
-        while (c.charAt(0) === ' ') c = c.substring(1, c.length);
-        if (typeof c === 'string' && c.indexOf(nameEQ) === 0) return c.substring(nameEQ.length, c.length);
-    }
-    return null;
-}
 
 export default function ScanPage() {
     const { user } = useAuth();
@@ -39,67 +15,224 @@ export default function ScanPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [error, setError] = useState("");
     const [isCameraActive, setIsCameraActive] = useState(false);
-    const [activeDeviceId, setActiveDeviceId] = useState<string | undefined>(undefined);
-    const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [cameraId, setCameraId] = useState<string | null>(null);
+    const [availableCameras, setAvailableCameras] = useState<{ id: string; label: string }[]>([]);
+
+    const scannerRef = useRef<Html5Qrcode | null>(null);
+    const scannerDivId = "qr-reader";
+
+    // Cleanup scanner on unmount
+    useEffect(() => {
+        return () => {
+            if (scannerRef.current?.isScanning) {
+                scannerRef.current.stop().catch(console.error);
+            }
+        };
+    }, []);
 
     const startCamera = async () => {
+        setIsLoading(true);
+        setError("");
+
         try {
-            const devices = await navigator.mediaDevices.enumerateDevices();
-            const vDevices = devices.filter(d => d.kind === 'videoinput');
-            setVideoDevices(vDevices);
+            // Initialize scanner
+            if (!scannerRef.current) {
+                scannerRef.current = new Html5Qrcode(scannerDivId);
+            }
 
-            if (vDevices.length > 0) {
-                const savedId = getCookie("gym-platform-camera-id");
-                if (savedId && vDevices.find(d => d.deviceId === savedId)) {
-                    setActiveDeviceId(savedId);
-                } else {
-                    // Prefer back camera (environment-facing) for QR scanning
-                    const backCamera = vDevices.find(d =>
-                        d.label.toLowerCase().includes('back') ||
-                        d.label.toLowerCase().includes('rear') ||
-                        d.label.toLowerCase().includes('environment')
-                    );
+            // Check for saved camera preference
+            const savedCameraId = localStorage.getItem("gym-platform-camera-id");
 
-                    if (backCamera) {
-                        setActiveDeviceId(backCamera.deviceId);
-                    } else {
-                        // Fallback: use last camera (usually back camera on mobile)
-                        setActiveDeviceId(vDevices[vDevices.length - 1].deviceId);
+            // Configure camera constraints
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+            };
+
+            // Success callback
+            const onScanSuccess = async (decodedText: string) => {
+                if (isProcessing || !user || result) return;
+
+                setIsProcessing(true);
+
+                try {
+                    let gymId = decodedText;
+                    try {
+                        const data = JSON.parse(decodedText);
+                        if (data.gymId) gymId = data.gymId;
+                    } catch (e) {
+                        // Not JSON, treat as raw ID
                     }
+
+                    const response = await processAttendance(user.uid, gymId);
+                    setResult(response);
+
+                    // Stop scanner after successful scan
+                    if (scannerRef.current?.isScanning) {
+                        await scannerRef.current.stop();
+                    }
+                } catch (err) {
+                    console.error(err);
+                    setError("Invalid QR Code");
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
+
+            // Error callback (silent, as errors are common during scanning)
+            const onScanError = () => {
+                // Silently ignore scan errors - they happen frequently during normal scanning
+            };
+
+            // Try to start with saved camera or rear camera preference
+            if (savedCameraId) {
+                try {
+                    await scannerRef.current.start(
+                        savedCameraId,
+                        config,
+                        onScanSuccess,
+                        onScanError
+                    );
+                    setCameraId(savedCameraId);
+                    setIsCameraActive(true);
+                    setIsLoading(false);
+                    return;
+                } catch (err) {
+                    console.log("Saved camera not available, falling back to default");
                 }
             }
-            setIsCameraActive(true);
+
+            // Fallback: Use facingMode to automatically select rear camera
+            try {
+                await scannerRef.current.start(
+                    { facingMode: "environment" }, // Prefer rear camera
+                    config,
+                    onScanSuccess,
+                    onScanError
+                );
+
+                // Get the actual camera ID being used
+                const cameras = await Html5Qrcode.getCameras();
+                if (cameras.length > 0) {
+                    const state = scannerRef.current.getState();
+                    // Try to identify which camera is active
+                    const activeCamera = cameras[cameras.length - 1]; // Usually rear camera
+                    setCameraId(activeCamera.id);
+                    localStorage.setItem("gym-platform-camera-id", activeCamera.id);
+                }
+
+                setIsCameraActive(true);
+            } catch (err: any) {
+                console.error("Error starting camera:", err);
+                setError(
+                    err.message?.includes("Permission")
+                        ? "Camera permission denied. Please allow camera access."
+                        : "Unable to access camera. Please check your device settings."
+                );
+            }
         } catch (err: any) {
-            console.error("Error enumerating devices:", err);
-            setIsCameraActive(true);
+            console.error("Error initializing scanner:", err);
+            setError("Failed to initialize scanner. Please refresh the page.");
+        } finally {
+            setIsLoading(false);
         }
     };
 
-    const handleScan = async (detectedCodes: any[]) => {
-        if (isProcessing || !user || result) return;
-
-        const code = detectedCodes[0]?.rawValue;
-        if (!code) return;
-
-        setIsProcessing(true);
+    const switchCamera = async () => {
+        if (!scannerRef.current) return;
 
         try {
-            let gymId = code;
-            try {
-                const data = JSON.parse(code);
-                if (data.gymId) gymId = data.gymId;
-            } catch (e) {
-                // Not JSON, treat as raw ID
+            setIsLoading(true);
+
+            // Get available cameras
+            const cameras = await Html5Qrcode.getCameras();
+            setAvailableCameras(cameras.map(c => ({ id: c.id, label: c.label })));
+
+            if (cameras.length <= 1) {
+                setError("No other cameras available");
+                setIsLoading(false);
+                return;
             }
 
-            const response = await processAttendance(user.uid, gymId);
-            setResult(response);
-        } catch (err) {
-            console.error(err);
-            setError("Invalid QR Code");
+            // Stop current scanner
+            if (scannerRef.current.isScanning) {
+                await scannerRef.current.stop();
+            }
+
+            // Find next camera
+            const currentIndex = cameras.findIndex(c => c.id === cameraId);
+            const nextIndex = (currentIndex + 1) % cameras.length;
+            const nextCamera = cameras[nextIndex];
+
+            // Start with next camera
+            const config = {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0,
+            };
+
+            const onScanSuccess = async (decodedText: string) => {
+                if (isProcessing || !user || result) return;
+
+                setIsProcessing(true);
+
+                try {
+                    let gymId = decodedText;
+                    try {
+                        const data = JSON.parse(decodedText);
+                        if (data.gymId) gymId = data.gymId;
+                    } catch (e) {
+                        // Not JSON, treat as raw ID
+                    }
+
+                    const response = await processAttendance(user.uid, gymId);
+                    setResult(response);
+
+                    if (scannerRef.current?.isScanning) {
+                        await scannerRef.current.stop();
+                    }
+                } catch (err) {
+                    console.error(err);
+                    setError("Invalid QR Code");
+                } finally {
+                    setIsProcessing(false);
+                }
+            };
+
+            const onScanError = () => {
+                // Silently ignore
+            };
+
+            await scannerRef.current.start(
+                nextCamera.id,
+                config,
+                onScanSuccess,
+                onScanError
+            );
+
+            setCameraId(nextCamera.id);
+            localStorage.setItem("gym-platform-camera-id", nextCamera.id);
+            setError("");
+        } catch (err: any) {
+            console.error("Error switching camera:", err);
+            setError("Failed to switch camera");
         } finally {
-            setIsProcessing(false);
+            setIsLoading(false);
         }
+    };
+
+    const stopCamera = async () => {
+        if (scannerRef.current?.isScanning) {
+            try {
+                await scannerRef.current.stop();
+            } catch (err) {
+                console.error("Error stopping camera:", err);
+            }
+        }
+        setIsCameraActive(false);
+        setError("");
     };
 
     return (
@@ -163,9 +296,10 @@ export default function ScanPage() {
 
                                 <button
                                     onClick={startCamera}
-                                    className="w-full px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-500 transition-all hover-lift shadow-xl"
+                                    disabled={isLoading}
+                                    className="w-full px-8 py-4 bg-emerald-600 text-white font-bold rounded-2xl hover:bg-emerald-500 transition-all hover-lift shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
-                                    Open Camera
+                                    {isLoading ? "Starting Camera..." : "Open Camera"}
                                 </button>
 
                                 {error && (
@@ -177,19 +311,9 @@ export default function ScanPage() {
                         ) : (
                             // Scanner View
                             <div className="w-full max-w-md flex flex-col items-center fade-in">
-                                <div className="w-full aspect-square relative overflow-hidden rounded-3xl border-4 border-white/10 mb-6 shadow-2xl">
-                                    <Scanner
-                                        onScan={handleScan}
-                                        onError={(err: any) => {
-                                            console.error(err);
-                                        }}
-                                        constraints={{
-                                            deviceId: activeDeviceId,
-                                            aspectRatio: 1,
-                                        }}
-                                        formats={['qr_code']}
-                                        components={{ onOff: true, torch: true }}
-                                    />
+                                <div className="w-full aspect-square relative overflow-hidden rounded-3xl border-4 border-white/10 mb-6 shadow-2xl bg-black">
+                                    {/* Scanner container */}
+                                    <div id={scannerDivId} className="w-full h-full"></div>
 
                                     {/* Scanning Frame Overlay */}
                                     <div className="absolute inset-0 pointer-events-none">
@@ -210,6 +334,13 @@ export default function ScanPage() {
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Loading overlay */}
+                                    {isLoading && (
+                                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                            <div className="text-white text-sm">Loading...</div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 <p className="text-sm text-gray-400 text-center mb-6 px-4">
@@ -217,29 +348,29 @@ export default function ScanPage() {
                                 </p>
 
                                 <div className="flex gap-3 w-full">
-                                    {videoDevices.length > 1 && (
-                                        <button
-                                            onClick={() => {
-                                                const currentIndex = videoDevices.findIndex(d => d.deviceId === activeDeviceId);
-                                                const nextIndex = (currentIndex + 1) % videoDevices.length;
-                                                const nextDeviceId = videoDevices[nextIndex].deviceId;
-                                                setActiveDeviceId(nextDeviceId);
-                                                setCookie("gym-platform-camera-id", nextDeviceId, 365);
-                                            }}
-                                            className="flex-1 px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/20 transition-all"
-                                        >
-                                            <Camera className="w-4 h-4" />
-                                            Switch ({videoDevices.findIndex(d => d.deviceId === activeDeviceId) + 1}/{videoDevices.length})
-                                        </button>
-                                    )}
+                                    <button
+                                        onClick={switchCamera}
+                                        disabled={isLoading}
+                                        className="flex-1 px-5 py-3 bg-white/10 backdrop-blur-sm rounded-xl text-sm font-semibold flex items-center justify-center gap-2 hover:bg-white/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Camera className="w-4 h-4" />
+                                        Switch Camera
+                                    </button>
 
                                     <button
-                                        onClick={() => { setIsCameraActive(false); setError(""); }}
-                                        className="flex-1 px-5 py-3 bg-white/5 backdrop-blur-sm rounded-xl text-sm font-semibold text-gray-400 hover:bg-white/10 hover:text-white transition-all"
+                                        onClick={stopCamera}
+                                        disabled={isLoading}
+                                        className="flex-1 px-5 py-3 bg-white/5 backdrop-blur-sm rounded-xl text-sm font-semibold text-gray-400 hover:bg-white/10 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                     >
                                         Cancel
                                     </button>
                                 </div>
+
+                                {error && (
+                                    <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl w-full">
+                                        <p className="text-red-400 text-sm text-center">{error}</p>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </>
