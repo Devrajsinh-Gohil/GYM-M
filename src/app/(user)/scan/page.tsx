@@ -34,10 +34,18 @@ export default function ScanPage() {
     const startCamera = async () => {
         setIsLoading(true);
         setError("");
+        setIsCameraActive(true); // Set this first to render the DOM element
+
+        // Wait for DOM to be ready
+        await new Promise(resolve => setTimeout(resolve, 100));
 
         try {
-            // Initialize scanner
+            // Initialize scanner only after DOM element exists
             if (!scannerRef.current) {
+                const element = document.getElementById(scannerDivId);
+                if (!element) {
+                    throw new Error("Scanner element not found in DOM");
+                }
                 scannerRef.current = new Html5Qrcode(scannerDivId);
             }
 
@@ -96,7 +104,6 @@ export default function ScanPage() {
                         onScanError
                     );
                     setCameraId(savedCameraId);
-                    setIsCameraActive(true);
                     setIsLoading(false);
                     return;
                 } catch (err) {
@@ -116,24 +123,25 @@ export default function ScanPage() {
                 // Get the actual camera ID being used
                 const cameras = await Html5Qrcode.getCameras();
                 if (cameras.length > 0) {
-                    const state = scannerRef.current.getState();
                     // Try to identify which camera is active
                     const activeCamera = cameras[cameras.length - 1]; // Usually rear camera
                     setCameraId(activeCamera.id);
                     localStorage.setItem("gym-platform-camera-id", activeCamera.id);
                 }
-
-                setIsCameraActive(true);
             } catch (err: any) {
                 console.error("Error starting camera:", err);
+                setIsCameraActive(false); // Reset camera state on error
                 setError(
-                    err.message?.includes("Permission")
+                    err.message?.includes("Permission") || err.message?.includes("NotAllowedError")
                         ? "Camera permission denied. Please allow camera access."
-                        : "Unable to access camera. Please check your device settings."
+                        : err.message?.includes("NotFoundError")
+                            ? "No camera found on this device."
+                            : "Unable to access camera. Please check your device settings."
                 );
             }
         } catch (err: any) {
             console.error("Error initializing scanner:", err);
+            setIsCameraActive(false); // Reset camera state on error
             setError("Failed to initialize scanner. Please refresh the page.");
         } finally {
             setIsLoading(false);
